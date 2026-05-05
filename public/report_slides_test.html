@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CFPS Report — Slide Deck (Test)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/reveal.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/theme/white.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/reveal.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script src="data_loader.js"></script>
+<style>
+.reveal{font-family:'DM Sans',system-ui,sans-serif;font-size:22px}
+.reveal h1{font-size:2.2em;font-weight:800;letter-spacing:-.03em;color:#0F4A32}
+.reveal h2{font-size:1.5em;font-weight:700;color:#1B6B4A;border-bottom:3px solid #E3F2EB;padding-bottom:8px;margin-bottom:16px;text-align:left}
+.reveal h3{font-size:1.1em;font-weight:600;color:#475569;text-align:left}
+.reveal p,.reveal li{font-size:.75em;color:#3a3a36;line-height:1.6;text-align:left}
+.reveal ul{margin-left:1em}
+.reveal .slides section{padding:40px 50px;text-align:left}
+.reveal .slide-number{font-size:14px;color:#94a3b8}
+
+.kpi-row{display:flex;gap:12px;margin:16px 0;flex-wrap:wrap}
+.kpi{flex:1;min-width:120px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #2563eb;border-radius:6px;padding:12px 16px}
+.kpi-val{font-size:1.6em;font-weight:800;color:#0f172a;line-height:1.1}
+.kpi-label{font-size:.55em;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-top:2px;font-weight:600}
+
+.perf-row{display:flex;gap:12px;margin:16px 0}
+.perf-card{flex:1;border-radius:8px;padding:14px 18px}
+.perf-card.top{background:#f0fdf4;border:1.5px solid #bbf7d0}
+.perf-card.bot{background:#fef2f2;border:1.5px solid #fecaca}
+.perf-card.spread{background:#eff6ff;border:1.5px solid #bfdbfe}
+.perf-title{font-size:.5em;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.perf-card.top .perf-title{color:#166534}
+.perf-card.bot .perf-title{color:#991b1b}
+.perf-card.spread .perf-title{color:#1e40af}
+.perf-name{font-size:1em;font-weight:700}
+.perf-card.top .perf-name{color:#15803d}
+.perf-card.bot .perf-name{color:#dc2626}
+.perf-card.spread .perf-name{color:#1d4ed8}
+.perf-detail{font-size:.55em;color:#475569;margin-top:3px}
+
+.stat-table{width:100%;border-collapse:collapse;font-size:.6em;margin:10px 0}
+.stat-table th{padding:6px 10px;text-align:left;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em;font-size:.85em;border-bottom:2px solid #e2e8f0;background:#f8fafc}
+.stat-table td{padding:5px 10px;border-bottom:1px solid #f1f5f9}
+.stat-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.stat-table tr:hover{background:#f8fafc}
+
+.chart-wrap{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin:10px 0;display:inline-block}
+.slide-footer{position:absolute;bottom:16px;left:50px;right:50px;display:flex;justify-content:space-between;font-size:.45em;color:#94a3b8}
+
+#loading-msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#fff;z-index:9999;font-family:'DM Sans',sans-serif;color:#64748b;font-size:16px;flex-direction:column;gap:12px}
+#loading-msg.hidden{display:none}
+.spinner{width:24px;height:24px;border:3px solid #e2e8f0;border-top-color:#1B6B4A;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="loading-msg">
+  <div class="spinner"></div>
+  Loading data and building slides...
+</div>
+
+<div class="reveal" id="revealRoot" style="display:none">
+  <div class="slides" id="slidesContainer"></div>
+</div>
+
+<script>
+// ── Shared utilities ──
+function Q(a,q){if(!a||!a.length)return 0;const s=[...a].sort((x,y)=>x-y);const p=(s.length-1)*q;const lo=Math.floor(p),hi=Math.ceil(p);return lo===hi?s[lo]:s[lo]+(p-lo)*(s[hi]-s[lo]);}
+function mn(a){return a&&a.length?a.reduce((s,v)=>s+v,0)/a.length:0;}
+function stdev(a){if(!a||a.length<2)return 0;const m=mn(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/a.length);}
+function iqrClean(v){if(!v||v.length<4)return v||[];const q1=Q(v,.25),q3=Q(v,.75),r=q3-q1;return v.filter(x=>x>=q1-1.5*r&&x<=q3+1.5*r);}
+function fmtN(v){if(!isFinite(v))return"0";return v>=1e3?(v/1e3).toFixed(1)+"k":v.toFixed(0);}
+function linReg(pts){if(!pts||pts.length<2)return{slope:0,inter:0,r2:0};const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),n=xs.length;let sx=0,sy=0,sxx=0,sxy=0;for(let i=0;i<n;i++){sx+=xs[i];sy+=ys[i];sxx+=xs[i]*xs[i];sxy+=xs[i]*ys[i];}const den=n*sxx-sx*sx;if(Math.abs(den)<1e-10)return{slope:0,inter:0,r2:0};const slope=(n*sxy-sx*sy)/den,inter=(sy-slope*sx)/n,ymean=sy/n;let ssT=0,ssR=0;for(let i=0;i<n;i++){ssT+=(ys[i]-ymean)**2;ssR+=(ys[i]-(slope*xs[i]+inter))**2;}return{slope:+slope.toFixed(2),inter:+inter.toFixed(2),r2:ssT>0?+((1-ssR/ssT).toFixed(4)):0};}
+
+const PAL=["#2563eb","#d97706","#059669","#dc2626","#7c3aed","#db2777","#0891b2","#65a30d","#ea580c","#4f46e5","#a855f7","#14b8a6"];
+const CM={Premium:"#2563eb",Economy:"#d97706",Ready96:"#059669",control:"#64748b",neg:"#9ca3af"};
+const gc=k=>CM[k]||"#6b7280";
+const gL=(r,b)=>{if(b==="product")return r.prod||"";if(b==="lysate")return r.lys||"";if(b==="operator")return r.op||"";if(b==="template")return r.tmpl||"";if(b==="rxn_vol")return(r.rv||0)+"uL";if(b==="master_mix")return r.mm||"";if(b==="test_cond")return r.tc||"";return r.prod||"";};
+
+function parseCSV(text){
+  var lines=text.trim().split('\n');var hdr=lines[0].split(',').map(h=>h.trim().replace(/"/g,'').toUpperCase());var rows=[];
+  for(var i=1;i<lines.length;i++){var vals=lines[i].split(',');var r={};for(var j=0;j<hdr.length;j++)r[hdr[j]]=(vals[j]||'').trim().replace(/"/g,'');rows.push(r)}
+  var all=rows.map(r=>({well:r.WELL||'',meas:parseFloat(r.MEASUREMENT)||0,rn:parseInt(r.ROW_NUMBER)||0,cn:parseInt(r.COLUMN_NUMBER)||0,key:r.KEY||'',lys:r.LYSATE||'',mm:r.MASTER_MIX||'',prod:r.PRODUCT||'',tmpl:r.TEMPLATE||'',op:r.OPERATOR||'',rv:parseFloat(r.REACTION_VOLUME)||0,dil:parseFloat(r.DILUTION)||0,eid:r.EXP_ID||'',tc:r.TEST_CONDITION||'',conc:parseFloat(r.FINAL_CONCENTRATION_WITH_DILUTION)||null,label:r.LABEL||'',vessel:r.VESSEL||'',stdConc:parseFloat(r.CONCENTRATION)||null}));
+  var samples=all.filter(r=>r.conc!==null&&r.key.indexOf('Standard')<0&&r.key.indexOf('spike-in')<0&&r.key.indexOf('Spike-in')<0);
+  var std={};all.forEach(r=>{var isS=r.key.indexOf('Standard')>=0||r.label.indexOf('Standard')>=0;if(isS&&r.stdConc!=null&&isFinite(r.stdConc)){if(!std[r.eid])std[r.eid]=[];std[r.eid].push([r.stdConc,Math.round(r.meas)])}});
+  var meta={};var sE={};samples.forEach(r=>{sE[r.eid]=1});
+  Object.keys(sE).sort().forEach(e=>{var sub=samples.filter(r=>r.eid===e);var ops={},lys={},tms={},vols={};sub.forEach(r=>{if(r.op)ops[r.op]=1;if(r.lys)lys[r.lys]=1;if(r.tmpl)tms[r.tmpl]=1;if(r.rv)vols[r.rv]=1});meta[e]={o:Object.keys(ops),l:Object.keys(lys),t:Object.keys(tms),v:Object.keys(vols).map(Number).sort((a,b)=>a-b),n:sub.length}});
+  return{samples,std,meta};
+}
+
+// ── Build slides ──
+function buildSlides(data){
+  const{samples,std,meta}=data;
+  const eids=[...new Set(samples.map(r=>r.eid))].sort();
+  const container=document.getElementById('slidesContainer');
+  const now=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const reportId='RPT-'+Date.now().toString(36).toUpperCase();
+
+  // ── SLIDE 1: Title ──
+  container.innerHTML+=`
+    <section>
+      <h1 style="text-align:center;margin-top:1.5em">CFPS Experiment Report</h1>
+      <p style="text-align:center;font-size:.9em;color:#64748b;margin-top:12px">${eids.join(', ')}</p>
+      <p style="text-align:center;font-size:.65em;color:#94a3b8;margin-top:24px">
+        JCM-Claude Analyzer Toolkit<br>
+        ${now} &middot; ${reportId}
+      </p>
+    </section>`;
+
+  eids.forEach(eid=>{
+    const expSamples=samples.filter(r=>r.eid===eid);
+    const concs=expSamples.map(r=>r.conc).filter(v=>v!=null);
+    const cleaned=iqrClean(concs);
+    const outlierCount=concs.length-cleaned.length;
+    const meanConc=cleaned.length?mn(cleaned):0;
+    const medConc=cleaned.length?Q(cleaned,.5):0;
+    const cvPct=meanConc>0?stdev(cleaned)/meanConc*100:0;
+    const stdPts=std[eid]||[];
+    const fit=linReg(stdPts);
+    const m=meta[eid]||{o:[],l:[],t:[],v:[],n:0};
+
+    // Group by product
+    const groups={};
+    expSamples.forEach(r=>{const k=r.prod||'unknown';if(!groups[k])groups[k]=[];groups[k].push(r.conc);});
+    const groupStats=Object.entries(groups).map(([k,v])=>{
+      const c=iqrClean(v),avg=mn(c),sd=stdev(c);
+      return{group:k,n:v.length,mean:avg,median:Q(c,.5),sd,cv:avg?sd/avg*100:0,min:c.length?Math.min(...c):0,max:c.length?Math.max(...c):0,outliers:v.length-c.length};
+    }).sort((a,b)=>b.mean-a.mean);
+
+    // ── SLIDE: Experiment header ──
+    container.innerHTML+=`
+      <section>
+        <h2>${eid}</h2>
+        <h3>Experiment Overview</h3>
+        <p><strong>Operator:</strong> ${m.o.join(', ')||'--'} &nbsp;&middot;&nbsp;
+           <strong>Lysate:</strong> ${m.l.join(', ')||'--'} &nbsp;&middot;&nbsp;
+           <strong>Template:</strong> ${m.t.join(', ')||'--'} &nbsp;&middot;&nbsp;
+           <strong>Vol:</strong> ${m.v.join('/')+'uL'||'--'}</p>
+        <div class="kpi-row">
+          <div class="kpi" style="border-left-color:#2563eb"><div class="kpi-val">${meanConc.toFixed(0)}</div><div class="kpi-label">Mean (mg/L)</div></div>
+          <div class="kpi" style="border-left-color:#059669"><div class="kpi-val">${medConc.toFixed(0)}</div><div class="kpi-label">Median (mg/L)</div></div>
+          <div class="kpi" style="border-left-color:#d97706"><div class="kpi-val">${cvPct.toFixed(1)}%</div><div class="kpi-label">CV%</div></div>
+          <div class="kpi" style="border-left-color:#7c3aed"><div class="kpi-val">${concs.length}</div><div class="kpi-label">Samples</div></div>
+          <div class="kpi" style="border-left-color:#dc2626"><div class="kpi-val">${outlierCount}</div><div class="kpi-label">Outliers</div></div>
+          <div class="kpi" style="border-left-color:#0891b2"><div class="kpi-val">${fit.r2.toFixed(4)}</div><div class="kpi-label">R²</div></div>
+        </div>
+        <div class="slide-footer"><span>JCM-Claude Toolkit</span><span>${eid} &middot; ${reportId}</span></div>
+      </section>`;
+
+    // ── SLIDE: Concentration chart ──
+    const chartId='chart-'+eid.replace(/\W/g,'');
+    container.innerHTML+=`
+      <section>
+        <h2>${eid} — Concentration by Product</h2>
+        <div class="chart-wrap"><svg id="${chartId}" width="800" height="320"></svg></div>
+        <div class="slide-footer"><span>JCM-Claude Toolkit</span><span>${eid} &middot; ${reportId}</span></div>
+      </section>`;
+
+    // We'll draw the chart after Reveal initializes (needs DOM)
+    requestAnimationFrame(()=>drawMeanSD(chartId,groups));
+
+    // ── SLIDE: Top/Bottom + Stats ──
+    if(groupStats.length>=2){
+      const top=groupStats[0],bot=groupStats[groupStats.length-1];
+      const spread=bot.mean>0?((top.mean-bot.mean)/bot.mean*100):0;
+      let statsHTML='';
+      groupStats.forEach(g=>{
+        const cvCol=g.cv>15?'#dc2626':g.cv>10?'#d97706':'#059669';
+        statsHTML+=`<tr>
+          <td><span style="display:inline-block;width:8px;height:8px;border-radius:4px;background:${gc(g.group)};margin-right:6px;vertical-align:middle"></span>${g.group}</td>
+          <td class="num">${g.n}</td>
+          <td class="num" style="font-weight:700">${g.mean.toFixed(0)}</td>
+          <td class="num">${g.median.toFixed(0)}</td>
+          <td class="num">${g.sd.toFixed(1)}</td>
+          <td class="num" style="color:${cvCol};font-weight:700">${g.cv.toFixed(1)}%</td>
+        </tr>`;
+      });
+
+      container.innerHTML+=`
+        <section>
+          <h2>${eid} — Performance Summary</h2>
+          <div class="perf-row">
+            <div class="perf-card top">
+              <div class="perf-title">Top Performer</div>
+              <div class="perf-name">${top.group}</div>
+              <div class="perf-detail">Mean: ${top.mean.toFixed(0)} mg/L &middot; CV: ${top.cv.toFixed(1)}% &middot; n=${top.n}</div>
+            </div>
+            <div class="perf-card bot">
+              <div class="perf-title">Bottom Performer</div>
+              <div class="perf-name">${bot.group}</div>
+              <div class="perf-detail">Mean: ${bot.mean.toFixed(0)} mg/L &middot; CV: ${bot.cv.toFixed(1)}% &middot; n=${bot.n}</div>
+            </div>
+            <div class="perf-card spread">
+              <div class="perf-title">Spread</div>
+              <div class="perf-name">${spread.toFixed(1)}%</div>
+              <div class="perf-detail">${top.mean.toFixed(0)} vs ${bot.mean.toFixed(0)} mg/L</div>
+            </div>
+          </div>
+          <table class="stat-table">
+            <thead><tr><th>Group</th><th>n</th><th>Mean</th><th>Median</th><th>SD</th><th>CV%</th></tr></thead>
+            <tbody>${statsHTML}</tbody>
+          </table>
+          <div class="slide-footer"><span>JCM-Claude Toolkit</span><span>${eid} &middot; ${reportId}</span></div>
+        </section>`;
+    }
+
+    // ── SLIDE: Standard Curve ──
+    if(stdPts.length>=2){
+      const scId='sc-'+eid.replace(/\W/g,'');
+      const r2Col=fit.r2>=.99?'#059669':fit.r2>=.98?'#d97706':'#dc2626';
+      container.innerHTML+=`
+        <section>
+          <h2>${eid} — Standard Curve</h2>
+          <div style="display:flex;gap:24px;align-items:flex-start">
+            <div class="chart-wrap"><svg id="${scId}" width="500" height="300"></svg></div>
+            <div style="font-size:.7em;color:#475569;line-height:2;min-width:180px">
+              <div><strong>Points:</strong> ${stdPts.length}</div>
+              <div><strong>Slope:</strong> ${fit.slope.toFixed(2)}</div>
+              <div><strong>Intercept:</strong> ${fit.inter.toFixed(2)}</div>
+              <div><strong>R²:</strong> <span style="color:${r2Col};font-weight:700">${fit.r2.toFixed(4)}</span></div>
+              <div><strong>Equation:</strong> <span style="font-family:monospace;font-size:.9em">y = ${fit.slope.toFixed(1)}x + ${fit.inter.toFixed(1)}</span></div>
+            </div>
+          </div>
+          <div class="slide-footer"><span>JCM-Claude Toolkit</span><span>${eid} &middot; ${reportId}</span></div>
+        </section>`;
+      requestAnimationFrame(()=>drawStdCurve(scId,stdPts,fit));
+    }
+  });
+
+  // ── FINAL SLIDE ──
+  container.innerHTML+=`
+    <section>
+      <h1 style="text-align:center;margin-top:2em;color:#94a3b8;font-size:1.5em">End of Report</h1>
+      <p style="text-align:center;font-size:.7em;color:#c1c9d4;margin-top:16px">
+        ${reportId} &middot; ${now}<br>
+        Generated by JCM-Claude Analyzer Toolkit
+      </p>
+      <p style="text-align:center;font-size:.55em;color:#d1d5db;margin-top:32px">
+        Arrow keys to navigate &middot; F for fullscreen &middot; Esc for overview &middot; Ctrl+P to export as PDF
+      </p>
+    </section>`;
+}
+
+// ── D3 chart renderers ──
+function drawMeanSD(id,groups){
+  const svg=d3.select('#'+id);if(svg.empty())return;
+  const W=800,H=320,pad={t:20,r:20,b:60,l:60};
+  const iw=W-pad.l-pad.r,ih=H-pad.t-pad.b;
+  const ks=Object.keys(groups).sort();
+  const stats=ks.map((k,ki)=>{const v=groups[k],c=iqrClean(v),m=mn(c),s=stdev(c);return{k,vals:v,mean:m,sd:s,n:v.length,col:gc(k)||PAL[ki%PAL.length]};});
+  const maxV=Math.max(...stats.map(s=>s.mean+s.sd),100)*1.15;
+  const yS=d3.scaleLinear().domain([0,maxV]).range([ih,0]);
+  const xS=d3.scaleBand().domain(ks).range([0,iw]).padding(.25);
+  const g=svg.append('g').attr('transform','translate('+pad.l+','+pad.t+')');
+  yS.ticks(6).forEach(t=>{g.append('line').attr('x1',0).attr('x2',iw).attr('y1',yS(t)).attr('y2',yS(t)).attr('stroke','#f1f5f9');g.append('text').attr('x',-8).attr('y',yS(t)).attr('dy',4).attr('text-anchor','end').attr('fill','#94a3b8').attr('font-size',11).text(fmtN(t));});
+  g.append('text').attr('transform','translate(-48,'+ih/2+') rotate(-90)').attr('text-anchor','middle').attr('fill','#94a3b8').attr('font-size',11).text('mg/L');
+  stats.forEach(s=>{
+    const x=xS(s.k),bw=xS.bandwidth(),cx=x+bw/2;
+    g.append('line').attr('x1',cx).attr('x2',cx).attr('y1',yS(Math.min(maxV,s.mean+s.sd))).attr('y2',yS(Math.max(0,s.mean-s.sd))).attr('stroke',s.col).attr('stroke-width',2.5).attr('opacity',.35);
+    g.append('line').attr('x1',cx-8).attr('x2',cx+8).attr('y1',yS(Math.min(maxV,s.mean+s.sd))).attr('y2',yS(Math.min(maxV,s.mean+s.sd))).attr('stroke',s.col).attr('stroke-width',2).attr('opacity',.35);
+    g.append('line').attr('x1',cx-8).attr('x2',cx+8).attr('y1',yS(Math.max(0,s.mean-s.sd))).attr('y2',yS(Math.max(0,s.mean-s.sd))).attr('stroke',s.col).attr('stroke-width',2).attr('opacity',.35);
+    s.vals.forEach((v,i)=>{const jx=bw*.1+((i*7+3)%19)/19*bw*.8;g.append('circle').attr('cx',x+jx).attr('cy',yS(v)).attr('r',2.5).attr('fill',s.col).attr('fill-opacity',.25);});
+    g.append('circle').attr('cx',cx).attr('cy',yS(s.mean)).attr('r',8).attr('fill',s.col).attr('stroke','#fff').attr('stroke-width',2.5);
+    g.append('text').attr('x',cx).attr('y',ih+18).attr('text-anchor','middle').attr('fill','#475569').attr('font-size',11).text(s.k.length>14?s.k.slice(0,12)+'..':s.k);
+    g.append('text').attr('x',cx).attr('y',ih+32).attr('text-anchor','middle').attr('fill','#94a3b8').attr('font-size',9).text('n='+s.n);
+  });
+}
+
+function drawStdCurve(id,pts,fit){
+  const svg=d3.select('#'+id);if(svg.empty())return;
+  const W=500,H=300,pad={t:16,r:20,b:40,l:56};
+  const iw=W-pad.l-pad.r,ih=H-pad.t-pad.b;
+  const xMax=Math.max(...pts.map(p=>p[0]))*1.15;
+  const yMax=Math.max(...pts.map(p=>p[1]))*1.15;
+  const xS=d3.scaleLinear().domain([0,xMax]).range([0,iw]);
+  const yS=d3.scaleLinear().domain([0,yMax]).range([ih,0]);
+  const r2Col=fit.r2>=.99?'#059669':fit.r2>=.98?'#d97706':'#dc2626';
+  const g=svg.append('g').attr('transform','translate('+pad.l+','+pad.t+')');
+  yS.ticks(6).forEach(t=>{g.append('line').attr('x1',0).attr('x2',iw).attr('y1',yS(t)).attr('y2',yS(t)).attr('stroke','#f1f5f9');g.append('text').attr('x',-8).attr('y',yS(t)).attr('dy',4).attr('text-anchor','end').attr('fill','#94a3b8').attr('font-size',10).text(fmtN(t));});
+  xS.ticks(6).forEach(t=>{g.append('text').attr('x',xS(t)).attr('y',ih+18).attr('text-anchor','middle').attr('fill','#94a3b8').attr('font-size',10).text(t);});
+  g.append('line').attr('x1',xS(0)).attr('y1',yS(Math.max(0,fit.inter))).attr('x2',xS(xMax)).attr('y2',yS(fit.slope*xMax+fit.inter)).attr('stroke',r2Col).attr('stroke-width',2).attr('stroke-dasharray','8,4').attr('opacity',.5);
+  pts.forEach(p=>{g.append('circle').attr('cx',xS(p[0])).attr('cy',yS(p[1])).attr('r',5).attr('fill',r2Col).attr('fill-opacity',.7).attr('stroke','#fff').attr('stroke-width',2);});
+  g.append('text').attr('x',iw).attr('y',12).attr('text-anchor','end').attr('fill',r2Col).attr('font-size',14).attr('font-weight',700).text('R² = '+fit.r2.toFixed(4));
+  g.append('text').attr('x',iw/2).attr('y',ih+34).attr('text-anchor','middle').attr('fill','#94a3b8').attr('font-size',11).text('Concentration (ug/mL)');
+  g.append('text').attr('transform','translate(-44,'+ih/2+') rotate(-90)').attr('text-anchor','middle').attr('fill','#94a3b8').attr('font-size',11).text('RFU');
+}
+
+// ── Init ──
+loadData().then(function(c){
+  if(!c){document.getElementById('loading-msg').innerHTML='<p>No data loaded. <a href="load.html">Load data first</a>.</p>';return;}
+  const parsed=parseCSV(c.csv);
+  buildSlides(parsed);
+
+  document.getElementById('loading-msg').classList.add('hidden');
+  document.getElementById('revealRoot').style.display='block';
+
+  Reveal.initialize({
+    hash:true,
+    slideNumber:'c/t',
+    width:1100,
+    height:700,
+    margin:0.04,
+    transition:'slide',
+    backgroundTransition:'fade',
+    center:false,
+  });
+});
+</script>
+</body>
+</html>

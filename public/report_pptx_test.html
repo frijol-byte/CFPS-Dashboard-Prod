@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CFPS Report — PPTX Export (Test)</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="data_loader.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',system-ui,sans-serif;background:#FAFAF8;color:#1a1a18;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.wrap{text-align:center;max-width:560px;padding:3rem 2rem}
+h1{font-size:1.8rem;font-weight:700;letter-spacing:-.03em;color:#0F4A32;margin-bottom:.5rem}
+p{font-size:.9rem;color:#5C5B56;line-height:1.6;margin-bottom:1.5rem}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border-radius:10px;border:none;font-size:1rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s}
+.btn-primary{background:#1B6B4A;color:#fff;box-shadow:0 4px 16px rgba(27,107,74,.25)}
+.btn-primary:hover{background:#0F4A32;box-shadow:0 6px 24px rgba(27,107,74,.35)}
+.btn-primary:disabled{background:#94a3b8;box-shadow:none;cursor:not-allowed}
+.btn-back{background:#fff;color:#5C5B56;border:1px solid #DDD9D1;padding:8px 16px;font-size:.82rem;margin-top:1rem}
+.btn-back:hover{border-color:#1B6B4A;color:#1B6B4A}
+.status{margin-top:1rem;font-size:.82rem;color:#64748b;min-height:1.5em}
+.status.ok{color:#059669}
+.status.err{color:#dc2626}
+.opt-row{display:flex;gap:12px;justify-content:center;margin-bottom:1.5rem;flex-wrap:wrap}
+.opt{display:flex;align-items:center;gap:6px;font-size:.82rem;color:#475569}
+.opt select{padding:4px 8px;border:1px solid #DDD9D1;border-radius:6px;font-family:inherit;font-size:.82rem;background:#fff;cursor:pointer}
+.spinner{display:inline-block;width:16px;height:16px;border:2.5px solid #DDD9D1;border-top-color:#1B6B4A;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Export to PowerPoint</h1>
+  <p>Generates a <strong>.pptx</strong> file from your loaded experiment data. Compatible with PowerPoint, Google Slides, and Keynote. Charts are native and editable.</p>
+
+  <div class="opt-row">
+    <div class="opt">
+      <label>Group by:</label>
+      <select id="groupBy">
+        <option value="product">Product</option>
+        <option value="lysate">Lysate</option>
+        <option value="operator">Operator</option>
+        <option value="template">Template</option>
+        <option value="master_mix">Master Mix</option>
+      </select>
+    </div>
+    <div class="opt">
+      <label>Theme:</label>
+      <select id="theme">
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+        <option value="forest">Forest Green</option>
+      </select>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" id="exportBtn" onclick="doExport()" disabled>
+    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Download .pptx
+  </button>
+  <div class="status" id="status">Loading data...</div>
+  <br>
+  <a class="btn btn-back" href="index.html">Back to Toolkit</a>
+</div>
+
+<script>
+// ── Utils ──
+function Q(a,q){if(!a||!a.length)return 0;const s=[...a].sort((x,y)=>x-y);const p=(s.length-1)*q;const lo=Math.floor(p),hi=Math.ceil(p);return lo===hi?s[lo]:s[lo]+(p-lo)*(s[hi]-s[lo]);}
+function mn(a){return a&&a.length?a.reduce((s,v)=>s+v,0)/a.length:0;}
+function stdev(a){if(!a||a.length<2)return 0;const m=mn(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/a.length);}
+function iqrClean(v){if(!v||v.length<4)return v||[];const q1=Q(v,.25),q3=Q(v,.75),r=q3-q1;return v.filter(x=>x>=q1-1.5*r&&x<=q3+1.5*r);}
+function linReg(pts){if(!pts||pts.length<2)return{slope:0,inter:0,r2:0};const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),n=xs.length;let sx=0,sy=0,sxx=0,sxy=0;for(let i=0;i<n;i++){sx+=xs[i];sy+=ys[i];sxx+=xs[i]*xs[i];sxy+=xs[i]*ys[i];}const den=n*sxx-sx*sx;if(Math.abs(den)<1e-10)return{slope:0,inter:0,r2:0};const slope=(n*sxy-sx*sy)/den,inter=(sy-slope*sx)/n,ymean=sy/n;let ssT=0,ssR=0;for(let i=0;i<n;i++){ssT+=(ys[i]-ymean)**2;ssR+=(ys[i]-(slope*xs[i]+inter))**2;}return{slope:+slope.toFixed(2),inter:+inter.toFixed(2),r2:ssT>0?+((1-ssR/ssT).toFixed(4)):0};}
+
+const gL=(r,b)=>{if(b==="product")return r.prod||"";if(b==="lysate")return r.lys||"";if(b==="operator")return r.op||"";if(b==="template")return r.tmpl||"";if(b==="master_mix")return r.mm||"";if(b==="rxn_vol")return(r.rv||0)+"uL";if(b==="test_cond")return r.tc||"";return r.prod||"";};
+const GROUP_LABELS={product:"Product",lysate:"Lysate",operator:"Operator",template:"Template",master_mix:"Master Mix",rxn_vol:"Rxn Vol",test_cond:"Test Condition"};
+const CHART_COLORS=["2563EB","D97706","059669","DC2626","7C3AED","DB2777","0891B2","65A30D","EA580C","4F46E5","A855F7","14B8A6"];
+
+function parseCSV(text){
+  var lines=text.trim().split('\n');var hdr=lines[0].split(',').map(h=>h.trim().replace(/"/g,'').toUpperCase());var rows=[];
+  for(var i=1;i<lines.length;i++){var vals=lines[i].split(',');var r={};for(var j=0;j<hdr.length;j++)r[hdr[j]]=(vals[j]||'').trim().replace(/"/g,'');rows.push(r)}
+  var all=rows.map(r=>({well:r.WELL||'',meas:parseFloat(r.MEASUREMENT)||0,rn:parseInt(r.ROW_NUMBER)||0,cn:parseInt(r.COLUMN_NUMBER)||0,key:r.KEY||'',lys:r.LYSATE||'',mm:r.MASTER_MIX||'',prod:r.PRODUCT||'',tmpl:r.TEMPLATE||'',op:r.OPERATOR||'',rv:parseFloat(r.REACTION_VOLUME)||0,dil:parseFloat(r.DILUTION)||0,eid:r.EXP_ID||'',tc:r.TEST_CONDITION||'',conc:parseFloat(r.FINAL_CONCENTRATION_WITH_DILUTION)||null,label:r.LABEL||'',vessel:r.VESSEL||'',stdConc:parseFloat(r.CONCENTRATION)||null}));
+  var samples=all.filter(r=>r.conc!==null&&r.key.indexOf('Standard')<0&&r.key.indexOf('spike-in')<0&&r.key.indexOf('Spike-in')<0);
+  var std={};all.forEach(r=>{var isS=r.key.indexOf('Standard')>=0||r.label.indexOf('Standard')>=0;if(isS&&r.stdConc!=null&&isFinite(r.stdConc)){if(!std[r.eid])std[r.eid]=[];std[r.eid].push([r.stdConc,Math.round(r.meas)])}});
+  var meta={};var sE={};samples.forEach(r=>{sE[r.eid]=1});
+  Object.keys(sE).sort().forEach(e=>{var sub=samples.filter(r=>r.eid===e);var ops={},lys={},tms={},vols={};sub.forEach(r=>{if(r.op)ops[r.op]=1;if(r.lys)lys[r.lys]=1;if(r.tmpl)tms[r.tmpl]=1;if(r.rv)vols[r.rv]=1});meta[e]={o:Object.keys(ops),l:Object.keys(lys),t:Object.keys(tms),v:Object.keys(vols).map(Number).sort((a,b)=>a-b),n:sub.length}});
+  return{samples,std,meta};
+}
+
+let DATA=null;
+
+loadData().then(function(c){
+  if(!c){document.getElementById('status').className='status err';document.getElementById('status').textContent='No data. Load data first.';return;}
+  DATA=parseCSV(c.csv);
+  const eids=[...new Set(DATA.samples.map(r=>r.eid))].sort();
+  document.getElementById('status').className='status ok';
+  document.getElementById('status').textContent='Ready — '+eids.length+' experiment'+(eids.length>1?'s':'')+' ('+DATA.samples.length+' samples)';
+  document.getElementById('exportBtn').disabled=false;
+});
+
+function doExport(){
+  const btn=document.getElementById('exportBtn');
+  const st=document.getElementById('status');
+  btn.disabled=true;
+  st.className='status';
+  st.innerHTML='<span class="spinner"></span>Building slides...';
+
+  setTimeout(()=>{
+    try{
+      buildPptx();
+      st.className='status ok';
+      st.textContent='Download started!';
+    }catch(e){
+      st.className='status err';
+      st.textContent='Error: '+e.message;
+    }
+    btn.disabled=false;
+  },50);
+}
+
+function buildPptx(){
+  const groupBy=document.getElementById('groupBy').value;
+  const theme=document.getElementById('theme').value;
+  const{samples,std,meta}=DATA;
+  const eids=[...new Set(samples.map(r=>r.eid))].sort();
+  const now=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const reportId='RPT-'+Date.now().toString(36).toUpperCase();
+
+  // Theme colors
+  const themes={
+    light:{bg:'FFFFFF',title:'0F4A32',subtitle:'64748B',text:'1A1A18',text2:'475569',accent:'1B6B4A',kpiBg:'F8FAFC',kpiBorder:'E2E8F0',cardBg:'F0FDF4'},
+    dark:{bg:'1E293B',title:'86EFAC',subtitle:'94A3B8',text:'F1F5F9',text2:'CBD5E1',accent:'34D399',kpiBg:'334155',kpiBorder:'475569',cardBg:'064E3B'},
+    forest:{bg:'F3F2EE',title:'056B39',subtitle:'8A8A83',text:'1A1A18',text2:'4A4A45',accent:'056B39',kpiBg:'E3F2EB',kpiBorder:'A7F3D0',cardBg:'DCFCE7'}
+  };
+  const T=themes[theme]||themes.light;
+
+  const pptx=new PptxGenJS();
+  pptx.layout='LAYOUT_WIDE';
+  pptx.author='JCM-Claude Toolkit';
+  pptx.subject='CFPS Experiment Report';
+  pptx.title='CFPS Report — '+eids.join(', ');
+
+  // ═══ SLIDE 1: Title ═══
+  let slide=pptx.addSlide();
+  slide.background={fill:T.bg};
+  slide.addText('CFPS Experiment Report',{x:.8,y:1.8,w:11.5,h:1,fontSize:36,fontFace:'Calibri',bold:true,color:T.title,align:'center'});
+  slide.addText(eids.join(', '),{x:.8,y:2.9,w:11.5,h:.6,fontSize:18,fontFace:'Calibri',color:T.subtitle,align:'center'});
+  slide.addText(now+' · '+reportId,{x:.8,y:3.7,w:11.5,h:.4,fontSize:11,fontFace:'Calibri',color:T.subtitle,align:'center'});
+  slide.addText('JCM-Claude Analyzer Toolkit · Cell-Free Protein Synthesis',{x:.8,y:6.5,w:11.5,h:.3,fontSize:9,fontFace:'Calibri',color:T.subtitle,align:'center'});
+
+  eids.forEach(eid=>{
+    const expSamples=samples.filter(r=>r.eid===eid);
+    const concs=expSamples.map(r=>r.conc).filter(v=>v!=null);
+    const cleaned=iqrClean(concs);
+    const outlierCount=concs.length-cleaned.length;
+    const meanConc=cleaned.length?mn(cleaned):0;
+    const medConc=cleaned.length?Q(cleaned,.5):0;
+    const sdConc=cleaned.length>1?stdev(cleaned):0;
+    const cvPct=meanConc>0?sdConc/meanConc*100:0;
+    const stdPts=std[eid]||[];
+    const fit=linReg(stdPts);
+    const m=meta[eid]||{o:[],l:[],t:[],v:[],n:0};
+
+    // Group data
+    const groups={};
+    expSamples.forEach(r=>{const k=gL(r,groupBy)||'unknown';if(!groups[k])groups[k]=[];groups[k].push(r.conc);});
+    const groupStats=Object.entries(groups).map(([k,v])=>{
+      const c=iqrClean(v),avg=mn(c),sd=stdev(c);
+      return{group:k,n:v.length,mean:avg,median:Q(c,.5),sd,cv:avg?sd/avg*100:0};
+    }).sort((a,b)=>b.mean-a.mean);
+
+    // ═══ SLIDE: KPI Overview ═══
+    slide=pptx.addSlide();
+    slide.background={fill:T.bg};
+    slide.addText(eid,{x:.5,y:.3,w:8,h:.5,fontSize:24,fontFace:'Calibri',bold:true,color:T.title});
+    slide.addText('Operator: '+m.o.join(', ')+' · Lysate: '+m.l.join(', ')+' · Template: '+m.t.join(', ')+' · Vol: '+m.v.join('/')+'uL',{x:.5,y:.8,w:12,h:.3,fontSize:10,fontFace:'Calibri',color:T.subtitle});
+
+    const kpis=[
+      {label:'Mean (mg/L)',val:meanConc.toFixed(0),color:'2563EB'},
+      {label:'Median (mg/L)',val:medConc.toFixed(0),color:'059669'},
+      {label:'CV%',val:cvPct.toFixed(1)+'%',color:'D97706'},
+      {label:'Samples',val:String(concs.length),color:'7C3AED'},
+      {label:'Outliers',val:String(outlierCount),color:'DC2626'},
+      {label:'R²',val:stdPts.length>=2?fit.r2.toFixed(4):'N/A',color:'0891B2'},
+    ];
+    kpis.forEach((kpi,i)=>{
+      const col=i%6,xPos=.5+col*2.05;
+      slide.addShape(pptx.ShapeType.roundRect,{x:xPos,y:1.3,w:1.9,h:.9,fill:{color:T.kpiBg},line:{color:kpi.color,width:1},rectRadius:.06});
+      slide.addText(kpi.val,{x:xPos,y:1.35,w:1.9,h:.5,fontSize:22,fontFace:'Calibri',bold:true,color:T.text,align:'center'});
+      slide.addText(kpi.label,{x:xPos,y:1.8,w:1.9,h:.3,fontSize:8,fontFace:'Calibri',color:T.subtitle,align:'center'});
+    });
+
+    // Auto-commentary
+    let commentary='';
+    if(stdPts.length>=2)commentary+='Standard curve R² = '+fit.r2.toFixed(4)+' (slope: '+fit.slope.toFixed(1)+', intercept: '+fit.inter.toFixed(1)+'). ';
+    if(cleaned.length>0)commentary+='Mean yield '+meanConc.toFixed(0)+' mg/L across '+cleaned.length+' samples (CV: '+cvPct.toFixed(1)+'%). ';
+    if(outlierCount>0)commentary+=outlierCount+' outlier'+(outlierCount>1?'s':'')+' removed by IQR. ';
+    slide.addText(commentary,{x:.5,y:2.4,w:12.3,h:.6,fontSize:10,fontFace:'Calibri',color:T.text2,italic:true});
+
+    // ═══ SLIDE: Bar Chart ═══
+    if(groupStats.length>0){
+      slide=pptx.addSlide();
+      slide.background={fill:T.bg};
+      slide.addText(eid+' — Concentration by '+GROUP_LABELS[groupBy],{x:.5,y:.3,w:10,h:.5,fontSize:20,fontFace:'Calibri',bold:true,color:T.title});
+
+      const chartData=[{
+        name:'Mean (mg/L)',
+        labels:groupStats.map(g=>g.group),
+        values:groupStats.map(g=>Math.round(g.mean))
+      }];
+      const chartColors=groupStats.map((_,i)=>CHART_COLORS[i%CHART_COLORS.length]);
+      slide.addChart(pptx.charts.BAR,chartData,{
+        x:.5,y:1,w:8,h:5.2,
+        showTitle:false,
+        showValue:true,
+        valueFontSize:9,
+        catAxisLabelFontSize:10,
+        valAxisLabelFontSize:9,
+        chartColors:chartColors,
+        barDir:'col',
+        barGapWidthPct:80,
+        catAxisOrientation:'minMax',
+        valAxisOrientation:'minMax',
+        showLegend:false,
+        valGridLine:{color:'E2E8F0',style:'dash',size:0.5},
+      });
+
+      // Side table
+      const tableRows=[
+        [{text:'Group',options:{bold:true,fontSize:8,color:'64748B',fill:{color:T.kpiBg}}},{text:'n',options:{bold:true,fontSize:8,color:'64748B',fill:{color:T.kpiBg},align:'right'}},{text:'Mean',options:{bold:true,fontSize:8,color:'64748B',fill:{color:T.kpiBg},align:'right'}},{text:'CV%',options:{bold:true,fontSize:8,color:'64748B',fill:{color:T.kpiBg},align:'right'}}]
+      ];
+      groupStats.forEach(g=>{
+        const cvCol=g.cv>15?'DC2626':g.cv>10?'D97706':'059669';
+        tableRows.push([
+          {text:g.group,options:{fontSize:8,color:T.text}},
+          {text:String(g.n),options:{fontSize:8,color:T.text2,align:'right'}},
+          {text:g.mean.toFixed(0),options:{fontSize:8,color:T.text,bold:true,align:'right'}},
+          {text:g.cv.toFixed(1)+'%',options:{fontSize:8,color:cvCol,bold:true,align:'right'}}
+        ]);
+      });
+      slide.addTable(tableRows,{x:8.8,y:1,w:4.2,colW:[1.6,.6,.8,.8],border:{type:'solid',color:'E2E8F0',pt:.5},rowH:.28});
+    }
+
+    // ═══ SLIDE: Top/Bottom Performers ═══
+    if(groupStats.length>=2){
+      const top=groupStats[0],bot=groupStats[groupStats.length-1];
+      const spread=bot.mean>0?((top.mean-bot.mean)/bot.mean*100):0;
+
+      slide=pptx.addSlide();
+      slide.background={fill:T.bg};
+      slide.addText(eid+' — Performance Summary',{x:.5,y:.3,w:10,h:.5,fontSize:20,fontFace:'Calibri',bold:true,color:T.title});
+
+      // Top performer card
+      slide.addShape(pptx.ShapeType.roundRect,{x:.5,y:1.2,w:3.8,h:1.8,fill:{color:'F0FDF4'},line:{color:'BBF7D0',width:1.5},rectRadius:.08});
+      slide.addText('TOP PERFORMER',{x:.7,y:1.3,w:3.4,h:.3,fontSize:8,fontFace:'Calibri',bold:true,color:'166534'});
+      slide.addText(top.group,{x:.7,y:1.6,w:3.4,h:.5,fontSize:20,fontFace:'Calibri',bold:true,color:'15803D'});
+      slide.addText('Mean: '+top.mean.toFixed(0)+' mg/L · CV: '+top.cv.toFixed(1)+'% · n='+top.n,{x:.7,y:2.2,w:3.4,h:.3,fontSize:9,fontFace:'Calibri',color:'166534'});
+
+      // Bottom performer card
+      slide.addShape(pptx.ShapeType.roundRect,{x:4.7,y:1.2,w:3.8,h:1.8,fill:{color:'FEF2F2'},line:{color:'FECACA',width:1.5},rectRadius:.08});
+      slide.addText('BOTTOM PERFORMER',{x:4.9,y:1.3,w:3.4,h:.3,fontSize:8,fontFace:'Calibri',bold:true,color:'991B1B'});
+      slide.addText(bot.group,{x:4.9,y:1.6,w:3.4,h:.5,fontSize:20,fontFace:'Calibri',bold:true,color:'DC2626'});
+      slide.addText('Mean: '+bot.mean.toFixed(0)+' mg/L · CV: '+bot.cv.toFixed(1)+'% · n='+bot.n,{x:4.9,y:2.2,w:3.4,h:.3,fontSize:9,fontFace:'Calibri',color:'991B1B'});
+
+      // Spread card
+      slide.addShape(pptx.ShapeType.roundRect,{x:8.9,y:1.2,w:3.8,h:1.8,fill:{color:'EFF6FF'},line:{color:'BFDBFE',width:1.5},rectRadius:.08});
+      slide.addText('SPREAD',{x:9.1,y:1.3,w:3.4,h:.3,fontSize:8,fontFace:'Calibri',bold:true,color:'1E40AF'});
+      slide.addText(spread.toFixed(1)+'%',{x:9.1,y:1.6,w:3.4,h:.5,fontSize:20,fontFace:'Calibri',bold:true,color:'1D4ED8'});
+      slide.addText(top.mean.toFixed(0)+' vs '+bot.mean.toFixed(0)+' mg/L',{x:9.1,y:2.2,w:3.4,h:.3,fontSize:9,fontFace:'Calibri',color:'1E40AF'});
+
+      // Full stats table
+      const fullRows=[
+        [{text:'Group',options:{bold:true,fontSize:9,color:'64748B',fill:{color:T.kpiBg}}},
+         {text:'n',options:{bold:true,fontSize:9,color:'64748B',fill:{color:T.kpiBg},align:'right'}},
+         {text:'Mean',options:{bold:true,fontSize:9,color:'64748B',fill:{color:T.kpiBg},align:'right'}},
+         {text:'Median',options:{bold:true,fontSize:9,color:'64748B',fill:{color:T.kpiBg},align:'right'}},
+         {text:'SD',options:{bold:true,fontSize:9,color:'64748B',fill:{color:T.kpiBg},align:'right'}},
+         {text:'CV%',options:{bold:true,fontSize:9,color:'64748B',fill:{color:T.kpiBg},align:'right'}}]
+      ];
+      groupStats.forEach(g=>{
+        const cvCol=g.cv>15?'DC2626':g.cv>10?'D97706':'059669';
+        fullRows.push([
+          {text:g.group,options:{fontSize:9,color:T.text}},
+          {text:String(g.n),options:{fontSize:9,color:T.text2,align:'right'}},
+          {text:g.mean.toFixed(0),options:{fontSize:9,color:T.text,bold:true,align:'right'}},
+          {text:g.median.toFixed(0),options:{fontSize:9,color:T.text2,align:'right'}},
+          {text:g.sd.toFixed(1),options:{fontSize:9,color:T.text2,align:'right'}},
+          {text:g.cv.toFixed(1)+'%',options:{fontSize:9,color:cvCol,bold:true,align:'right'}}
+        ]);
+      });
+      slide.addTable(fullRows,{x:.5,y:3.4,w:12.3,colW:[3.5,1,1.5,1.5,1.5,1.5],border:{type:'solid',color:'E2E8F0',pt:.5},rowH:.32});
+    }
+
+    // ═══ SLIDE: Standard Curve ═══
+    if(stdPts.length>=2){
+      slide=pptx.addSlide();
+      slide.background={fill:T.bg};
+      slide.addText(eid+' — Standard Curve',{x:.5,y:.3,w:10,h:.5,fontSize:20,fontFace:'Calibri',bold:true,color:T.title});
+
+      const scData=[{
+        name:'Standards',
+        labels:stdPts.map(p=>String(p[0])),
+        values:stdPts.map(p=>p[1])
+      }];
+      // Fit line as second series
+      const fitPts=stdPts.map(p=>p[0]).sort((a,b)=>a-b);
+      const fitLine={
+        name:'Fit',
+        labels:fitPts.map(String),
+        values:fitPts.map(x=>Math.round(fit.slope*x+fit.inter))
+      };
+
+      slide.addChart(pptx.charts.SCATTER,[scData[0]],{
+        x:.5,y:1,w:7.5,h:5.2,
+        showTitle:false,
+        showLegend:false,
+        lineSize:0,
+        lineDataSymbolSize:8,
+        chartColors:['059669'],
+        valAxisLabelFontSize:9,
+        catAxisLabelFontSize:9,
+        valGridLine:{color:'F1F5F9',style:'dash',size:0.5},
+      });
+
+      const r2Col=fit.r2>=.99?'059669':fit.r2>=.98?'D97706':'DC2626';
+      slide.addText([
+        {text:'R² = '+fit.r2.toFixed(4),options:{fontSize:18,bold:true,color:r2Col,breakLine:true}},
+        {text:'\nSlope: '+fit.slope.toFixed(2),options:{fontSize:11,color:T.text2,breakLine:true}},
+        {text:'Intercept: '+fit.inter.toFixed(2),options:{fontSize:11,color:T.text2,breakLine:true}},
+        {text:'Points: '+stdPts.length,options:{fontSize:11,color:T.text2,breakLine:true}},
+        {text:'\ny = '+fit.slope.toFixed(1)+'x + '+fit.inter.toFixed(1),options:{fontSize:10,color:T.subtitle,fontFace:'Courier New'}},
+      ],{x:8.5,y:1.2,w:4,h:3,valign:'top'});
+    }
+  });
+
+  // ═══ FINAL SLIDE ═══
+  slide=pptx.addSlide();
+  slide.background={fill:T.bg};
+  slide.addText('End of Report',{x:.8,y:2.5,w:11.5,h:.8,fontSize:28,fontFace:'Calibri',bold:true,color:T.subtitle,align:'center'});
+  slide.addText(reportId+' · '+now+'\nGenerated by JCM-Claude Analyzer Toolkit',{x:.8,y:3.5,w:11.5,h:.8,fontSize:11,fontFace:'Calibri',color:T.subtitle,align:'center'});
+
+  pptx.writeFile({fileName:'CFPS_Report_'+eids.join('_')+'_'+new Date().toISOString().slice(0,10)+'.pptx'});
+}
+</script>
+</body>
+</html>

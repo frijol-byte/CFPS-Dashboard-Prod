@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CFPS Data Browser</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/help-widget.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FAFAF8;--surface:#FFFFFF;--surface2:#F3F2EE;
+  --text:#1A1A18;--text2:#5C5B56;--text3:#8E8D88;
+  --accent:#6D28D9;--accent-light:#F3EEFB;--accent-dark:#4C1D95;
+  --green:#1B6B4A;--green-light:#E8F5EE;
+  --danger:#B5342E;--danger-light:#FCEEED;
+  --border:#DDD9D1;--border2:#C8C4BB;
+  --radius:10px;--radius-lg:14px;
+  --col-w:150px;
+}
+html{font-family:'DM Sans',system-ui,sans-serif;font-size:15px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+body{min-height:100vh;display:flex;flex-direction:column}
+
+/* ── FULL-WIDTH LAYOUT ── */
+.topbar{display:flex;align-items:center;gap:12px;padding:8px 20px;background:var(--surface);border-bottom:1.5px solid var(--border);position:sticky;top:0;z-index:100}
+.topbar h1{font-size:1rem;font-weight:700;letter-spacing:-.02em}
+.topbar p{font-size:.75rem;color:var(--text3)}
+.topbar .home-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text2);font-size:.75rem;font-weight:500;text-decoration:none;font-family:inherit;transition:all .2s}
+.topbar .home-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-light)}
+.topbar .home-btn svg{width:13px;height:13px}
+.topbar .db-tag{font-size:.7rem;font-family:'JetBrains Mono',monospace;color:var(--text3);padding:2px 8px;background:var(--surface2);border-radius:6px}
+.topbar .db-tag.ok{color:var(--green);background:var(--green-light)}
+
+.app-body{display:flex;flex:1;overflow:hidden;height:calc(100vh - 45px)}
+
+/* ── LEFT: Main content ── */
+.main-col{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:12px 16px 0}
+
+.status-bar{padding:6px 12px;border-radius:8px;font-size:.78rem;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.status-bar.loading{background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE}
+.status-bar.ready{background:var(--green-light);color:var(--green);border:1px solid #A7F3D0}
+.status-bar.error{background:var(--danger-light);color:var(--danger);border:1px solid #FECACA}
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid #BFDBFE;border-top-color:#2563EB;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.tables-bar{display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap}
+.table-chip{padding:4px 10px;border-radius:6px;font-size:.72rem;font-weight:500;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;transition:all .15s;font-family:inherit}
+.table-chip:hover{border-color:var(--accent);color:var(--accent)}
+.table-chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* Query bar — compact single row */
+.query-bar{display:flex;gap:6px;margin-bottom:6px;align-items:stretch}
+.query-input{
+  flex:1;font-family:'JetBrains Mono',monospace;font-size:.82rem;
+  padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;
+  background:var(--surface);color:var(--text);resize:none;
+  transition:border-color .2s;
+}
+.query-input:focus{outline:none;border-color:var(--accent)}
+.run-btn{padding:6px 18px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.run-btn:hover{background:var(--accent-dark)}
+
+.shortcuts{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap}
+.shortcut{font-size:.68rem;padding:3px 8px;border-radius:5px;background:var(--surface2);color:var(--text2);border:none;cursor:pointer;font-family:'JetBrains Mono',monospace;transition:all .15s}
+.shortcut:hover{background:var(--accent-light);color:var(--accent)}
+
+.result-info{font-size:.75rem;color:var(--text3);margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.result-info .tag{font-family:'JetBrains Mono',monospace;font-weight:500;font-size:.7rem;background:rgba(0,0,0,.05);padding:2px 6px;border-radius:5px}
+.dl-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text2);font-size:.7rem;font-weight:500;cursor:pointer;transition:all .15s;font-family:inherit}
+.dl-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-light)}
+
+/* ── TABLE — the key part ── */
+.table-area{flex:1;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface);margin-bottom:12px}
+.data-table{border-collapse:separate;border-spacing:0;font-size:.78rem}
+.data-table th{
+  position:sticky;top:0;z-index:2;
+  padding:6px 10px;text-align:left;font-weight:600;color:var(--text3);
+  border-bottom:1.5px solid var(--border);font-size:.68rem;
+  text-transform:uppercase;letter-spacing:.04em;background:var(--surface);
+  white-space:nowrap;cursor:default;user-select:none;
+  border-right:1px solid var(--surface2);
+}
+.data-table th:last-child{border-right:none}
+/* Resize handle */
+.data-table th .th-resize{
+  position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;
+  background:transparent;transition:background .15s;
+}
+.data-table th .th-resize:hover,.data-table th .th-resize.dragging{background:var(--accent);opacity:.4}
+.data-table td{
+  padding:5px 10px;border-bottom:1px solid var(--surface2);
+  font-family:'JetBrains Mono',monospace;font-size:.72rem;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  border-right:1px solid var(--surface2);
+}
+.data-table td:last-child{border-right:none}
+.data-table tr:hover td{background:var(--surface2)}
+.data-table td.num{text-align:right}
+/* Pinned */
+.data-table th.pinned{position:sticky;z-index:3;background:var(--surface);border-right:2px solid var(--accent) !important;box-shadow:2px 0 6px rgba(0,0,0,.08)}
+.data-table td.pinned{position:sticky;z-index:1;background:var(--surface);border-right:2px solid var(--accent) !important;box-shadow:2px 0 6px rgba(0,0,0,.08)}
+.data-table tr:hover td.pinned{background:var(--surface2)}
+
+.empty-state{text-align:center;padding:3rem;color:var(--text3)}
+.empty-state .icon{font-size:2rem;margin-bottom:.5rem;opacity:.4}
+.empty-state p{font-size:.85rem}
+
+/* Column context menu */
+.th-ctx{position:fixed;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.15);padding:4px 0;min-width:150px;font-size:.8rem}
+.th-ctx-item{padding:6px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .1s}
+.th-ctx-item:hover{background:var(--surface2)}
+
+/* ── RIGHT: SQL Reference sidebar ── */
+.sql-sidebar{
+  width:240px;min-width:240px;background:var(--surface);border-left:1.5px solid var(--border);
+  overflow-y:auto;padding:12px;font-size:.75rem;
+}
+.sql-sidebar h3{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin:0 0 8px}
+.sql-grp-title{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);margin:10px 0 3px}
+.sql-grp-title:first-of-type{margin-top:0}
+.sql-item{padding:2px 0;border-bottom:1px solid var(--surface2);cursor:pointer;transition:color .1s}
+.sql-item:last-child{border-bottom:none}
+.sql-item:hover{color:var(--accent)}
+.sql-fn{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:.7rem;color:var(--text)}
+.sql-syn{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--text3);display:block;margin-top:1px}
+
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="home-btn" href="index.html"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg> Home</a>
+  <div style="flex:1"></div>
+  <div><h1 style="display:inline">Data Browser</h1> <span style="font-size:.75rem;color:var(--text3)">Query the CFPS database</span></div>
+  <div style="flex:1"></div>
+  <span class="db-tag" id="dbTag">loading...</span>
+</div>
+
+<div class="app-body">
+
+  <!-- Main column -->
+  <div class="main-col">
+    <div id="status" class="status-bar loading"><span class="spinner"></span> Loading database...</div>
+
+    <div id="mainUI" style="display:none">
+      <div class="tables-bar" id="tablesBar"></div>
+      <div class="query-bar">
+        <textarea class="query-input" id="queryInput" rows="1" spellcheck="false">SELECT * FROM P902_Results LIMIT 50</textarea>
+        <button class="run-btn" id="runBtn" onclick="runQuery()">Run</button>
+      </div>
+      <div class="shortcuts" id="shortcuts"></div>
+      <div class="result-info" id="resultInfo" style="display:none">
+        <span id="rowCount"></span>
+        <span style="flex:1"></span>
+        <button class="dl-btn" onclick="downloadResults()"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</button>
+      </div>
+      <div class="table-area" id="tableArea"></div>
+    </div>
+  </div>
+
+  <!-- SQL Reference sidebar -->
+  <div class="sql-sidebar">
+    <h3>SQL Reference</h3>
+    <div class="sql-grp-title">Aggregate</div>
+    <div class="sql-item" onclick="insertSQL('COUNT(*)')"><span class="sql-fn">COUNT(*)</span><span class="sql-syn">Count rows</span></div>
+    <div class="sql-item" onclick="insertSQL('SUM(col)')"><span class="sql-fn">SUM(col)</span><span class="sql-syn">Total of values</span></div>
+    <div class="sql-item" onclick="insertSQL('AVG(col)')"><span class="sql-fn">AVG(col)</span><span class="sql-syn">Arithmetic mean</span></div>
+    <div class="sql-item" onclick="insertSQL('MIN(col)')"><span class="sql-fn">MIN(col)</span><span class="sql-syn">Smallest value</span></div>
+    <div class="sql-item" onclick="insertSQL('MAX(col)')"><span class="sql-fn">MAX(col)</span><span class="sql-syn">Largest value</span></div>
+    <div class="sql-item" onclick="insertSQL('GROUP_CONCAT(col, &quot;, &quot;)')"><span class="sql-fn">GROUP_CONCAT</span><span class="sql-syn">GROUP_CONCAT(col, ", ")</span></div>
+    <div class="sql-grp-title">Math</div>
+    <div class="sql-item" onclick="insertSQL('ROUND(col, 2)')"><span class="sql-fn">ROUND(col, n)</span><span class="sql-syn">Round to n decimals</span></div>
+    <div class="sql-item" onclick="insertSQL('ABS(col)')"><span class="sql-fn">ABS(col)</span><span class="sql-syn">Absolute value</span></div>
+    <div class="sql-item" onclick="insertSQL('CAST(col AS REAL)')"><span class="sql-fn">CAST(col AS type)</span><span class="sql-syn">REAL, INTEGER, TEXT</span></div>
+    <div class="sql-grp-title">Text</div>
+    <div class="sql-item" onclick="insertSQL('UPPER(col)')"><span class="sql-fn">UPPER / LOWER</span><span class="sql-syn">Change case</span></div>
+    <div class="sql-item" onclick="insertSQL('LENGTH(col)')"><span class="sql-fn">LENGTH(col)</span><span class="sql-syn">String length</span></div>
+    <div class="sql-item" onclick="insertSQL('SUBSTR(col, 1, 5)')"><span class="sql-fn">SUBSTR(col, start, len)</span><span class="sql-syn">Extract substring</span></div>
+    <div class="sql-item" onclick="insertSQL('REPLACE(col, &quot;old&quot;, &quot;new&quot;)')"><span class="sql-fn">REPLACE(col, old, new)</span><span class="sql-syn">Replace text</span></div>
+    <div class="sql-item" onclick="insertSQL('TRIM(col)')"><span class="sql-fn">TRIM(col)</span><span class="sql-syn">Remove whitespace</span></div>
+    <div class="sql-item" onclick="insertSQL('col || &quot; &quot; || col2')"><span class="sql-fn">||</span><span class="sql-syn">Concatenate strings</span></div>
+    <div class="sql-grp-title">Filtering</div>
+    <div class="sql-item" onclick="insertSQL('WHERE col = &quot;value&quot;')"><span class="sql-fn">WHERE</span><span class="sql-syn">col = "value"</span></div>
+    <div class="sql-item" onclick="insertSQL('WHERE col LIKE &quot;%pattern%&quot;')"><span class="sql-fn">LIKE</span><span class="sql-syn">% wildcard, _ single char</span></div>
+    <div class="sql-item" onclick="insertSQL('WHERE col IN (&quot;a&quot;, &quot;b&quot;)')"><span class="sql-fn">IN (...)</span><span class="sql-syn">Match any in list</span></div>
+    <div class="sql-item" onclick="insertSQL('WHERE col BETWEEN 1 AND 10')"><span class="sql-fn">BETWEEN</span><span class="sql-syn">Range inclusive</span></div>
+    <div class="sql-item" onclick="insertSQL('WHERE col IS NOT NULL')"><span class="sql-fn">IS NULL / IS NOT NULL</span><span class="sql-syn">Check for missing data</span></div>
+    <div class="sql-grp-title">Grouping &amp; Sorting</div>
+    <div class="sql-item" onclick="insertSQL('GROUP BY col')"><span class="sql-fn">GROUP BY col</span><span class="sql-syn">Aggregate by group</span></div>
+    <div class="sql-item" onclick="insertSQL('HAVING COUNT(*) > 1')"><span class="sql-fn">HAVING</span><span class="sql-syn">Filter after GROUP BY</span></div>
+    <div class="sql-item" onclick="insertSQL('ORDER BY col DESC')"><span class="sql-fn">ORDER BY col</span><span class="sql-syn">ASC (default) or DESC</span></div>
+    <div class="sql-item" onclick="insertSQL('LIMIT 100')"><span class="sql-fn">LIMIT n</span><span class="sql-syn">Cap number of rows</span></div>
+    <div class="sql-grp-title">Joins</div>
+    <div class="sql-item" onclick="insertSQL('JOIN table2 ON t1.col = t2.col')"><span class="sql-fn">JOIN ... ON</span><span class="sql-syn">Combine tables by key</span></div>
+    <div class="sql-item" onclick="insertSQL('LEFT JOIN table2 ON t1.col = t2.col')"><span class="sql-fn">LEFT JOIN</span><span class="sql-syn">Keep all left rows</span></div>
+    <div class="sql-item" onclick="insertSQL('SELECT DISTINCT col')"><span class="sql-fn">DISTINCT</span><span class="sql-syn">Unique values only</span></div>
+    <div class="sql-grp-title">Window</div>
+    <div class="sql-item" onclick="insertSQL('ROW_NUMBER() OVER (ORDER BY col)')"><span class="sql-fn">ROW_NUMBER()</span><span class="sql-syn">OVER (ORDER BY col)</span></div>
+    <div class="sql-item" onclick="insertSQL('RANK() OVER (PARTITION BY grp ORDER BY col)')"><span class="sql-fn">RANK()</span><span class="sql-syn">OVER (PARTITION BY ...)</span></div>
+    <div class="sql-grp-title">Schema</div>
+    <div class="sql-item" onclick="insertSQL('PRAGMA table_info(&quot;table_name&quot;)')"><span class="sql-fn">PRAGMA table_info</span><span class="sql-syn">Column names &amp; types</span></div>
+    <div class="sql-item" onclick="insertSQL('SELECT name FROM sqlite_master WHERE type=&quot;table&quot;')"><span class="sql-fn">List all tables</span><span class="sql-syn">sqlite_master query</span></div>
+    <div class="sql-grp-title">Conditional</div>
+    <div class="sql-item" onclick="insertSQL('CASE WHEN col > 10 THEN &quot;high&quot; ELSE &quot;low&quot; END')"><span class="sql-fn">CASE WHEN...END</span><span class="sql-syn">If/else logic</span></div>
+    <div class="sql-item" onclick="insertSQL('COALESCE(col, 0)')"><span class="sql-fn">COALESCE(col, default)</span><span class="sql-syn">First non-null value</span></div>
+    <div class="sql-item" onclick="insertSQL('NULLIF(col, 0)')"><span class="sql-fn">NULLIF(col, val)</span><span class="sql-syn">Return NULL if equal</span></div>
+  </div>
+
+</div>
+
+<script>
+let db=null,lastColumns=[],lastRows=[];
+let pinnedCols=new Set();
+let colWidths={}; // {colName: width in px}
+const DEFAULT_COL_W=150;
+
+const SHORTCUTS=[
+  {label:'All results',sql:'SELECT * FROM P902_Results LIMIT 100'},
+  {label:'All layouts',sql:'SELECT * FROM layouts LIMIT 100'},
+  {label:'Unique experiments',sql:"SELECT DISTINCT source_file FROM P902_Results"},
+  {label:'Sample summary',sql:"SELECT key, COUNT(*) as n, ROUND(AVG(final_concentration_with_dilution),4) as avg_conc FROM P902_Results WHERE key NOT LIKE 'Standard%' AND key != '' GROUP BY key ORDER BY avg_conc DESC"},
+  {label:'Standards',sql:"SELECT well, key, concentration, measurement FROM P902_Results WHERE key LIKE 'Standard%' ORDER BY concentration"},
+  {label:'Schema',sql:"SELECT name, sql FROM sqlite_master WHERE type='table'"},
+];
+
+async function initDB(){
+  const st=document.getElementById('status');
+  const tag=document.getElementById('dbTag');
+  try{
+    const SQL=await initSqlJs({locateFile:f=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/'+f});
+    const resp=await fetch('cfps.db');
+    if(!resp.ok)throw new Error('cfps.db not found');
+    db=new SQL.Database(new Uint8Array(await resp.arrayBuffer()));
+
+    const tables=db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
+    const tableNames=tables.length?tables[0].values.map(r=>r[0]):[];
+    let totalRows=0;
+    tableNames.forEach(t=>{const c=db.exec('SELECT COUNT(*) FROM "'+t+'"');if(c.length)totalRows+=c[0].values[0][0];});
+
+    st.className='status-bar ready';
+    st.innerHTML='Loaded — <span class="tag">'+tableNames.length+' tables</span> <span class="tag">'+totalRows.toLocaleString()+' rows</span>';
+    tag.className='db-tag ok';tag.textContent=tableNames.length+' tables';
+
+    const bar=document.getElementById('tablesBar');
+    tableNames.forEach(t=>{
+      const btn=document.createElement('button');
+      btn.className='table-chip';btn.textContent=t;
+      btn.onclick=()=>{document.getElementById('queryInput').value='SELECT * FROM "'+t+'" LIMIT 100';runQuery();};
+      bar.appendChild(btn);
+    });
+
+    const sc=document.getElementById('shortcuts');
+    SHORTCUTS.forEach(s=>{
+      const btn=document.createElement('button');btn.className='shortcut';btn.textContent=s.label;
+      btn.onclick=()=>{document.getElementById('queryInput').value=s.sql;runQuery();};
+      sc.appendChild(btn);
+    });
+
+    document.getElementById('mainUI').style.display='block';
+    runQuery();
+  }catch(err){
+    st.className='status-bar error';st.textContent='Error: '+err.message;
+    tag.textContent='error';
+  }
+}
+
+function runQuery(){
+  const sql=document.getElementById('queryInput').value.trim();
+  if(!sql||!db)return;
+  const area=document.getElementById('tableArea');
+  const info=document.getElementById('resultInfo');
+  try{
+    const result=db.exec(sql);
+    if(!result.length){
+      area.innerHTML='<div class="empty-state"><div class="icon">&empty;</div><p>Query returned no results</p></div>';
+      info.style.display='none';lastColumns=[];lastRows=[];return;
+    }
+    const cols=result[0].columns,rows=result[0].values;
+    lastColumns=cols;lastRows=rows;
+    document.getElementById('rowCount').innerHTML='<span class="tag">'+rows.length+' rows</span> <span class="tag">'+cols.length+' cols</span>';
+    info.style.display='flex';
+    renderTable(cols,rows);
+    document.querySelectorAll('.table-chip').forEach(c=>{
+      const tn=c.textContent;
+      c.classList.toggle('active',sql.toLowerCase().includes('"'+tn.toLowerCase()+'"')||sql.toLowerCase().includes('from '+tn.toLowerCase()));
+    });
+  }catch(err){
+    area.innerHTML='<div class="status-bar error">'+escH(err.message)+'</div>';
+    info.style.display='none';
+  }
+}
+
+function renderTable(cols,rows){
+  const area=document.getElementById('tableArea');
+  pinnedCols.forEach(c=>{if(!cols.includes(c))pinnedCols.delete(c);});
+  const isNum=cols.map((_,ci)=>rows.length>0&&rows.every(r=>r[ci]===null||typeof r[ci]==='number'));
+
+  // Compute pinned left offsets
+  const pinnedArr=cols.filter(c=>pinnedCols.has(c));
+  const pinnedLefts={};
+  let lo=0;
+  pinnedArr.forEach(c=>{const w=colWidths[c]||DEFAULT_COL_W;pinnedLefts[c]=lo;lo+=w;});
+
+  // Build table
+  const tbl=document.createElement('table');
+  tbl.className='data-table';
+
+  // Set total width
+  let totalW=0;
+  cols.forEach(c=>{totalW+=(colWidths[c]||DEFAULT_COL_W);});
+  tbl.style.width=totalW+'px';
+
+  // Header
+  const thead=document.createElement('thead');
+  const htr=document.createElement('tr');
+  cols.forEach((c,ci)=>{
+    const th=document.createElement('th');
+    th.textContent=c;
+    th.style.position='relative';
+    const w=colWidths[c]||DEFAULT_COL_W;
+    th.style.width=w+'px';th.style.minWidth=w+'px';th.style.maxWidth=w+'px';
+    const pin=pinnedCols.has(c);
+    if(pin){th.classList.add('pinned');th.style.left=pinnedLefts[c]+'px';th.textContent=c+' \uD83D\uDCCC';}
+    // Resize handle
+    const handle=document.createElement('div');
+    handle.className='th-resize';
+    handle.addEventListener('mousedown',e=>{e.preventDefault();startResize(e,c,th);});
+    th.appendChild(handle);
+    // Right-click
+    th.addEventListener('contextmenu',e=>{e.preventDefault();showCtxMenu(e,c);});
+    htr.appendChild(th);
+  });
+  thead.appendChild(htr);
+  tbl.appendChild(thead);
+
+  // Body
+  const tbody=document.createElement('tbody');
+  rows.forEach(r=>{
+    const tr=document.createElement('tr');
+    r.forEach((v,ci)=>{
+      const td=document.createElement('td');
+      const w=colWidths[cols[ci]]||DEFAULT_COL_W;
+      td.style.width=w+'px';td.style.minWidth=w+'px';td.style.maxWidth=w+'px';
+      if(isNum[ci])td.classList.add('num');
+      const pin=pinnedCols.has(cols[ci]);
+      if(pin){td.classList.add('pinned');td.style.left=pinnedLefts[cols[ci]]+'px';}
+      if(v===null){td.innerHTML='<span style="color:var(--text3)">NULL</span>';}
+      else{td.textContent=String(v);}
+      td.title=v===null?'NULL':String(v);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+
+  area.innerHTML='';
+  area.appendChild(tbl);
+}
+
+// ── Column resize ──
+function startResize(e,colName,thEl){
+  const startX=e.clientX;
+  const startW=colWidths[colName]||DEFAULT_COL_W;
+  const handle=thEl.querySelector('.th-resize');
+  handle.classList.add('dragging');
+  function onMove(ev){
+    const newW=Math.max(60,startW+(ev.clientX-startX));
+    colWidths[colName]=newW;
+    // Live update just this column's width
+    thEl.style.width=newW+'px';thEl.style.minWidth=newW+'px';thEl.style.maxWidth=newW+'px';
+  }
+  function onUp(){
+    handle.classList.remove('dragging');
+    document.removeEventListener('mousemove',onMove);
+    document.removeEventListener('mouseup',onUp);
+    renderTable(lastColumns,lastRows); // full re-render for total width + pinned offsets
+  }
+  document.addEventListener('mousemove',onMove);
+  document.addEventListener('mouseup',onUp);
+}
+
+// ── Column context menu ──
+function showCtxMenu(e,colName){
+  closeCtxMenu();
+  const isPinned=pinnedCols.has(colName);
+  const menu=document.createElement('div');
+  menu.className='th-ctx';menu.id='thCtxMenu';
+  menu.innerHTML=isPinned
+    ?'<div class="th-ctx-item" data-action="unpin">\uD83D\uDD13 Unpin column</div>'
+    :'<div class="th-ctx-item" data-action="pin">\uD83D\uDCCC Pin column</div>';
+  menu.style.left=e.clientX+'px';menu.style.top=e.clientY+'px';
+  document.body.appendChild(menu);
+  const r=menu.getBoundingClientRect();
+  if(r.right>window.innerWidth)menu.style.left=(window.innerWidth-r.width-4)+'px';
+  if(r.bottom>window.innerHeight)menu.style.top=(window.innerHeight-r.height-4)+'px';
+  menu.addEventListener('click',ev=>{
+    const item=ev.target.closest('.th-ctx-item');if(!item)return;
+    if(item.dataset.action==='pin')pinnedCols.add(colName);else pinnedCols.delete(colName);
+    closeCtxMenu();renderTable(lastColumns,lastRows);
+  });
+  setTimeout(()=>document.addEventListener('click',closeCtxMenu,{once:true}),0);
+}
+function closeCtxMenu(){const m=document.getElementById('thCtxMenu');if(m)m.remove();}
+
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function downloadResults(){
+  if(!lastColumns.length)return;
+  let csv=lastColumns.map(c=>'"'+c+'"').join(',')+'\n';
+  lastRows.forEach(r=>{csv+=r.map(v=>v===null?'':'"'+String(v).replace(/"/g,'""')+'"').join(',')+'\n';});
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='query_results.csv';a.click();URL.revokeObjectURL(a.href);
+}
+
+function insertSQL(text){
+  const ta=document.getElementById('queryInput');
+  const start=ta.selectionStart,end=ta.selectionEnd;
+  ta.value=ta.value.substring(0,start)+text+ta.value.substring(end);
+  ta.focus();ta.selectionStart=ta.selectionEnd=start+text.length;
+}
+
+document.getElementById('queryInput').addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();runQuery();}
+});
+
+initDB();
+</script>
+
+<script src="shared/help-widget.js"></script>
+<button class="help-fab" id="helpFab" onclick="toggleHelp()" title="Help">?</button>
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()"></div>
+<div class="help-modal" id="helpModal">
+  <button class="help-close" onclick="toggleHelp()">&times;</button>
+  <div class="help-modal-head"><h2>Data Browser — Help</h2><p>Query the experiment database with SQL</p></div>
+  <div class="help-modal-body"><h3>How It Works</h3>
+<p>The database (<code>cfps.db</code>) is loaded into your browser using sql.js (SQLite compiled to WebAssembly). You can run any SQL query — no backend server is involved.</p>
+
+<h3>Writing Queries</h3>
+<p>Type SQL in the editor and press <strong>Run</strong> (or <span style="background:#f0efe9;border:1px solid #d8d6cf;padding:1px 5px;border-radius:4px;font-size:.72rem;font-family:'JetBrains Mono',monospace">Ctrl+Enter</span>). Examples:</p>
+<ul>
+<li><code>SELECT * FROM P902_Results LIMIT 100</code></li>
+<li><code>SELECT EXP_ID, AVG(FINAL_CONCENTRATION_WITH_DILUTION) as avg_conc FROM P902_Results GROUP BY EXP_ID</code></li>
+<li><code>PRAGMA table_info('P902_Results')</code> — show column names and types</li>
+</ul>
+
+<h3>Table Features</h3>
+<ul>
+<li><strong>Right-click header</strong> — Pin/unpin a column so it stays visible while scrolling horizontally</li>
+<li><strong>Drag header edge</strong> — Resize any column by dragging the right edge of its header</li>
+<li><strong>Horizontal scroll</strong> — Tables with many columns scroll horizontally; only ~6 columns are visible at once</li>
+</ul>
+
+<h3>Available Tables</h3>
+<p><code>P902_Results</code> — experiment data; <code>P902_SO_Results</code> — salt optimization data; <code>layouts</code> — plate layouts; <code>lot_fermentation</code>, <code>lot_lysate</code>, <code>lot_mastermix</code>, <code>lot_std_curves</code>, <code>lot_controls</code>, <code>lot_cf_product</code>, <code>lot_plasmid</code>, <code>lot_premix</code>, <code>lot_pre_so_mm</code>, <code>lot_solubility_enhancer</code>, <code>lot_delivered_material</code>.</p>
+</div>
+</div>
+
+</body>
+</html>

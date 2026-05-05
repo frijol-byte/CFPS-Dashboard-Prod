@@ -1,0 +1,3 @@
+num,date_yymmdd,fte,ratio_of_lysate:_mastermix,prepared_for,volume_created,paired_lysate_lot,paired_mastermix_lot,unique_lot_number,lot_num__+_description
+1,2026-02-11,Person 2/ Person 5,1:1,CF-2602-4-12,80,20251209-15-L,20260210-19-MM-C,20260211-1-PM,
+2,2026-03-09,Person 6,1:1,Stability test,86,20260306-L-20,20260309-22-MM-C,20260309-2-PM,

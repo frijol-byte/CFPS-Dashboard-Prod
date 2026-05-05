@@ -1,0 +1,11 @@
+num,date_of_prep_yyyymmdd,operator,eln,fluorescence_protein,aliquot_volume,total_volume,storage_location,notes,run1_-_e61,run2-e75,run3-e78,run4-e104,run5
+1,20251010,Person 2,,eGFP,10,400,P902 -80 Freezer space,0.5,0.525,0.44,0.47,,
+2,20251105,Person 6,,eGFP,10,260,P902 -80 Freezer space,failed QC,,,,,
+3,20251106,Person 2,20251105-E99-Standard curve setup,eGFP,10,140,P902 -80 Freezer space,0.5,-,-,-,0.45,
+4,20251103,Person 2,P902_E123-P2-20251103-Prepare bulk eGFP standard curve and spike-in controls with C11 Lysate,eGFP,10,200,P902 -80 Freezer space,0.5,0.642 (E129),0.547 (E137),,,
+5,20251103,Person 2,P902_E124-P2-20251103-Prepare standard curves and spike-in controls using sfGFP,sfGFP,10,200,P902 -80 Freezer space,0.5,0.589 (E129),0.527 (E137),,,
+6,,,,,,,,,,,,,
+7,,,,,,,,,,,,,
+8,,,,,,,,,,,,,
+9,,,,,,,,,,,,,
+10,,,,,,,,,,,,,

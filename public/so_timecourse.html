@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salt Optimization - Time-Course</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/help-widget.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FAFAF8;--surface:#FFFFFF;--surface2:#F3F2EE;
+  --text:#1A1A18;--text2:#5C5B56;--text3:#8E8D88;
+  --teal:#0891B2;--teal-light:#CCFBF1;
+  --green:#1B6B4A;--border:#DDD9D1;--radius:10px;
+}
+html{font-family:'DM Sans',system-ui,sans-serif;font-size:15px;color:var(--text);background:var(--bg)}
+body{min-height:100vh;overflow-x:hidden}
+.mono{font-family:'JetBrains Mono',monospace}
+
+.navbar{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:1rem 1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;
+  position:sticky;top:0;z-index:10;
+}
+.nav-btn{
+  padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);color:var(--text2);font-size:.8rem;font-weight:500;
+  text-decoration:none;cursor:pointer;transition:all .2s;font-family:inherit;
+  border:none;
+}
+.nav-btn:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-light)}
+
+.app{max-width:1800px;margin:0 auto;padding:1.5rem}
+
+.topbar{display:flex;align-items:center;gap:12px;margin-bottom:1rem;flex-wrap:wrap}
+.topbar h1{font-size:1.3rem;font-weight:700;flex:1}
+
+.controls{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:.75rem 1.5rem;margin-bottom:1rem;display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center;
+}
+.control-item{display:flex;align-items:center;gap:8px}
+.control-item label{font-size:.85rem;font-weight:600}
+.control-item select{
+  padding:6px 10px;border:1px solid var(--border);border-radius:6px;
+  font-size:.85rem;font-family:inherit;background:var(--surface);
+}
+.control-item input[type="checkbox"]{width:16px;height:16px;cursor:pointer}
+
+/* ── Three-panel layout ── */
+.main-layout{
+  display:grid;grid-template-columns:auto 1fr 220px;gap:1rem;align-items:start;
+}
+
+/* ── Plate map ── */
+.plate-panel{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px;width:fit-content;
+}
+.plate-panel h3{font-size:.75rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.plate-grid{
+  display:grid;grid-template-columns:auto repeat(24,1fr);gap:1px;
+  user-select:none;
+}
+.plate-hdr{
+  font-size:6px;font-weight:700;color:var(--text3);
+  display:flex;align-items:center;justify-content:center;
+  width:16px;height:16px;
+}
+.plate-well{
+  width:16px;height:16px;border-radius:2px;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface2);
+  transition:all .08s;position:relative;
+}
+.plate-well:hover{border-color:var(--teal);z-index:1}
+.plate-well.has-data{background:#d4f1f4;border-color:#b0dfe5}
+.plate-well.empty{background:var(--bg);border-color:var(--surface2);cursor:default;opacity:.4}
+.plate-well.selected{border-width:2px;z-index:2}
+
+.plate-actions{display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap}
+.plate-actions button{
+  padding:3px 8px;border:1px solid var(--border);border-radius:4px;
+  background:var(--surface);color:var(--text2);font-size:.7rem;font-weight:600;
+  cursor:pointer;font-family:inherit;transition:all .12s;
+}
+.plate-actions button:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-light)}
+.sel-info{font-size:.7rem;color:var(--text3);font-weight:600}
+
+/* ── Legend ── */
+.legend-panel{
+  margin-top:10px;max-height:180px;overflow-y:auto;
+  border-top:1px solid var(--border);padding-top:8px;
+}
+.legend-item{
+  display:flex;align-items:center;gap:6px;padding:2px 0;font-size:.7rem;
+  font-family:'JetBrains Mono',monospace;color:var(--text2);
+}
+.legend-swatch{width:12px;height:3px;border-radius:1px;flex-shrink:0}
+
+/* ── Chart panel ── */
+.chart-panel{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:1.5rem;min-height:500px;display:flex;flex-direction:column;
+}
+.chart-panel h3{font-size:.8rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px}
+.chart-wrap{flex:1;position:relative;min-height:400px}
+.chart-wrap canvas{width:100%!important;height:100%!important}
+.chart-empty{
+  display:flex;align-items:center;justify-content:center;height:100%;
+  color:var(--text3);font-size:.9rem;font-style:italic;
+}
+
+/* ── Chart legend ── */
+.chart-legend{
+  display:flex;gap:18px;flex-wrap:wrap;align-items:center;
+  padding:10px 0 0;border-top:1px solid var(--border);margin-top:12px;
+  font-size:.75rem;color:var(--text2);font-weight:500;
+}
+.chart-legend-item{display:flex;align-items:center;gap:6px}
+.cl-line{width:20px;height:0;border-top:2.5px solid var(--text3)}
+.cl-dash{width:20px;height:0;border-top:2px dashed var(--text3)}
+.cl-tri{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:8px solid var(--text3)}
+.cl-diamond{width:9px;height:9px;background:var(--text3);transform:rotate(45deg)}
+
+/* ── Summary sidebar ── */
+.summary-panel{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px;font-size:.8rem;
+}
+.summary-panel h3{font-size:.75rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px}
+.summary-metric-select{
+  width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;
+  font-size:.8rem;font-family:inherit;background:var(--surface);margin-bottom:12px;
+}
+.summary-card{
+  border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;
+  background:var(--surface2);
+}
+.summary-card-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);margin-bottom:4px}
+.summary-card-value{font-size:1.1rem;font-weight:700;color:var(--text);font-family:'JetBrains Mono',monospace}
+.summary-card-sub{font-size:.65rem;color:var(--text3);margin-top:2px;font-family:'JetBrains Mono',monospace}
+.summary-empty{font-size:.75rem;color:var(--text3);font-style:italic;padding:1rem 0;text-align:center}
+
+/* ── Analysis panel ── */
+.analysis-panel{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:1rem 1.5rem;margin-top:1rem;
+}
+.analysis-panel h3{font-size:.8rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.analysis-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.analysis-table th{
+  text-align:left;padding:6px 10px;font-weight:600;color:var(--text3);
+  border-bottom:1.5px solid var(--border);font-size:.7rem;text-transform:uppercase;letter-spacing:.03em;
+}
+.analysis-table td{padding:6px 10px;border-bottom:1px solid var(--surface2);font-family:'JetBrains Mono',monospace;font-size:.75rem}
+.analysis-table tr:hover{background:var(--surface2)}
+
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:1rem;justify-content:center}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);color:var(--text2);font-size:.8rem;font-weight:600;
+  cursor:pointer;font-family:inherit;transition:all .2s;text-decoration:none;
+}
+.btn:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-light)}
+
+.loading{text-align:center;padding:3rem;color:var(--text3)}
+.spinner{display:inline-block;width:20px;height:20px;border:3px solid rgba(0,0,0,.1);border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+
+</style>
+</head>
+<body>
+
+<div class="navbar">
+  <a class="nav-btn" href="so_tool.html">&larr; Back to SO Tool</a>
+  <a class="nav-btn" href="index.html">Home</a>
+  <a class="nav-btn" id="navHeatmap" href="so_heatmap.html">&larr; Heatmap</a>
+  <span style="flex:1"></span>
+  <span style="font-size:.85rem;color:var(--text3)">Time-Course View</span>
+</div>
+
+<div class="app">
+
+<div class="topbar">
+  <h1>Time-Course Explorer</h1>
+  <span id="wellCount" style="font-size:.9rem;color:var(--text3)"></span>
+</div>
+
+<div class="controls">
+  <div class="control-item">
+    <label>Experiment</label>
+    <select id="expSelect" onchange="onExpChange()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;font-family:inherit;background:var(--surface)">
+    </select>
+  </div>
+  <div class="control-item">
+    <label>Lysate Lot</label>
+    <select id="lysateSelect" onchange="loadExperiment()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;font-family:'JetBrains Mono',monospace;background:var(--surface)">
+    </select>
+  </div>
+  <div class="control-item">
+    <label>Y-Axis</label>
+    <select id="yAxisMode" onchange="renderChart()">
+      <option value="shared">Shared (Global)</option>
+      <option value="individual">Individual per Well</option>
+    </select>
+  </div>
+  <div class="control-item">
+    <input type="checkbox" id="showInflection" checked onchange="renderChart()">
+    <label for="showInflection">Inflection points</label>
+  </div>
+  <div class="control-item">
+    <input type="checkbox" id="showAsymptote" checked onchange="renderChart()">
+    <label for="showAsymptote">Asymptotes</label>
+  </div>
+</div>
+
+<div id="expDescRow" style="padding:0 1rem .5rem;font-size:.82rem;color:var(--text2);font-style:italic;display:none"><span id="expDescText"></span> <button id="expDescEdit" onclick="editDesc()" title="Edit description" style="border:none;background:none;cursor:pointer;font-size:13px;color:var(--text3);padding:0 3px">&#9998;</button></div>
+<div id="expDescEditRow" style="padding:0 1rem .5rem;display:none"><input id="expDescInput" placeholder="Describe this experiment…" style="padding:4px 8px;font-size:.82rem;border:1px solid var(--teal);border-radius:6px;font-family:inherit;outline:none;width:300px"> <button onclick="commitDesc()" style="font-size:.78rem;padding:3px 10px;border-radius:6px;border:none;background:var(--teal);color:#fff;cursor:pointer;font-family:inherit;font-weight:600">Save</button> <button onclick="cancelDesc()" style="font-size:.78rem;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:inherit">Cancel</button> <span id="expDescMsg" style="font-size:.75rem;margin-left:6px"></span></div>
+
+<div class="main-layout">
+
+  <!-- Left: Plate Map -->
+  <div class="plate-panel">
+    <h3>Select Wells</h3>
+    <div class="plate-grid" id="plateGrid"></div>
+    <div class="plate-actions">
+      <button onclick="selectAllWithData()">Select All</button>
+      <button onclick="clearSelection()">Clear</button>
+      <span class="sel-info" id="selInfo">0 selected</span>
+    </div>
+    <div class="legend-panel" id="legendPanel"></div>
+  </div>
+
+  <!-- Right: Chart -->
+  <div class="chart-panel">
+    <h3>Fluorescence Time-Course</h3>
+    <div class="chart-wrap" id="chartWrap">
+      <div class="chart-empty" id="chartEmpty">Click wells on the plate map to view their time-course</div>
+      <canvas id="mainChart" style="display:none"></canvas>
+    </div>
+    <div class="chart-legend" id="chartLegend" style="display:none">
+      <div class="chart-legend-item"><div class="cl-line"></div> Trace</div>
+      <div class="chart-legend-item"><div class="cl-tri"></div> Inflection point</div>
+      <div class="chart-legend-item"><div class="cl-diamond"></div> Vmax</div>
+      <div class="chart-legend-item"><div class="cl-dash"></div> Asymptote</div>
+    </div>
+  </div>
+
+  <!-- Right: Summary -->
+  <div class="summary-panel" id="summaryPanel">
+    <h3>Summary</h3>
+    <select class="summary-metric-select" id="summaryMetric" onchange="renderSummary()">
+      <option value="mean">Mean</option>
+      <option value="median">Median</option>
+      <option value="geomean">Geometric Mean</option>
+    </select>
+    <div id="summaryContent">
+      <div class="summary-empty">Select wells to see summary statistics</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Analysis Table -->
+<div class="analysis-panel" id="analysisPanel" style="display:none">
+  <h3>Curve Analysis</h3>
+  <table class="analysis-table" id="analysisTable"></table>
+</div>
+
+<div class="actions">
+  <button class="btn" onclick="exportScreenshot()">&#8595; Screenshot (PNG)</button>
+</div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script src="so_data.js"></script>
+<script src="repo_utils.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  State
+// ═══════════════════════════════════════════════════════════════════════════
+let mergedData = null;
+let currentExpId = null;
+let mainChart = null;
+let currentAnalysisRows = [];
+
+const ROWS = 'ABCDEFGHIJKLMNOP'.split('');
+const COLS = Array.from({length:24},(_,i)=>i+1);
+
+let selectedWells = new Set();
+let wellsWithData = new Set();
+let lastClickedWell = null;
+let isDragging = false;
+let dragStartWell = null;
+
+const TRACE_COLORS = [
+  '#e6194b','#3cb44b','#4363d8','#f58231','#911eb4',
+  '#42d4f4','#f032e6','#bfef45','#469990','#9A6324',
+  '#800000','#000075','#e6beff','#aaffc3','#808000',
+  '#ffd8b1','#ffe119','#dcbeff','#fabebe','#008080',
+  '#aa6e28','#fffac8','#0082c8','#f032e6','#d2f53c'
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Init & Data Loading
+// ═══════════════════════════════════════════════════════════════════════════
+let allExperiments = [];
+
+async function init() {
+  try {
+    allExperiments = await listAllExperiments();
+    const expSelect = document.getElementById('expSelect');
+
+    if (allExperiments.length === 0) {
+      document.getElementById('chartWrap').innerHTML = '<div class="chart-empty">No experiments found. <a href="so_tool.html">Upload files</a> first.</div>';
+      expSelect.innerHTML = '<option value="">No experiments</option>';
+      return;
+    }
+
+    const uniqueIds = [...new Set(allExperiments.map(e => e.id))].sort();
+    expSelect.innerHTML = uniqueIds.map(id => `<option value="${id}">${id}</option>`).join('');
+
+    const params = new URLSearchParams(window.location.search);
+    const urlExp = params.get('exp');
+    const urlLysate = params.get('lysate');
+    if (urlExp && uniqueIds.includes(urlExp)) expSelect.value = urlExp;
+
+    populateLysateDropdown(urlLysate);
+    await loadExperiment();
+  } catch (error) {
+    document.getElementById('chartWrap').innerHTML = `<div class="chart-empty" style="color:red">Error: ${error.message}</div>`;
+  }
+}
+
+function populateLysateDropdown(preselect) {
+  const expId = document.getElementById('expSelect').value;
+  const lysateSelect = document.getElementById('lysateSelect');
+  const lysates = allExperiments.filter(e => e.id === expId).map(e => e.lysateLot);
+  const unique = [...new Set(lysates)].sort();
+  lysateSelect.innerHTML = unique.map(l => `<option value="${l}">${l || '(none)'}</option>`).join('');
+  if (preselect && unique.includes(preselect)) lysateSelect.value = preselect;
+}
+
+var _soDescs={};
+loadAllDescriptions().then(function(d){_soDescs=d||{};updateDescDisplay();});
+function updateDescDisplay(){
+  var eid=document.getElementById('expSelect').value;
+  var d=_soDescs[eid];var row=document.getElementById('expDescRow');var txt=document.getElementById('expDescText');
+  if(d&&d.description){txt.textContent=d.description;row.style.display='block';}else{txt.textContent='No description';row.style.display='block';}
+  document.getElementById('expDescEditRow').style.display='none';
+}
+function editDesc(){
+  var eid=document.getElementById('expSelect').value;var d=_soDescs[eid];
+  document.getElementById('expDescInput').value=d&&d.description||'';
+  document.getElementById('expDescEditRow').style.display='block';document.getElementById('expDescMsg').textContent='';
+  document.getElementById('expDescInput').focus();
+}
+function cancelDesc(){document.getElementById('expDescEditRow').style.display='none';}
+async function commitDesc(){
+  var eid=document.getElementById('expSelect').value;if(!eid)return;
+  var desc=document.getElementById('expDescInput').value.trim();if(!desc){cancelDesc();return;}
+  var msg=document.getElementById('expDescMsg');msg.textContent='Saving…';msg.style.color='var(--blue)';
+  try{await saveDescription(eid,desc,'');_soDescs[eid]={description:desc};updateDescDisplay();msg.textContent='Saved';msg.style.color='var(--green)';}
+  catch(e){msg.textContent='Error: '+e.message;msg.style.color='var(--red)';}
+}
+function onExpChange() {
+  populateLysateDropdown();
+  loadExperiment();
+  updateDescDisplay();
+}
+
+async function loadExperiment() {
+  const expId = document.getElementById('expSelect').value;
+  const lysateLot = document.getElementById('lysateSelect').value;
+  if (!expId) return;
+  currentExpId = expId;
+  document.getElementById('navHeatmap').href = `so_heatmap.html?exp=${encodeURIComponent(expId)}&lysate=${encodeURIComponent(lysateLot)}`;
+
+  mergedData = await loadExperimentMergedData(expId, lysateLot);
+
+  if (!mergedData) {
+    document.getElementById('chartWrap').innerHTML = '<div class="chart-empty">No data for this experiment.</div>';
+    return;
+  }
+
+  wellsWithData = new Set(mergedData.map(d => d.Well));
+  document.getElementById('wellCount').textContent = `${wellsWithData.size} wells`;
+
+  selectedWells.clear();
+  lastClickedWell = null;
+  buildPlateMap();
+  renderChart();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Plate Map
+// ═══════════════════════════════════════════════════════════════════════════
+function buildPlateMap() {
+  const grid = document.getElementById('plateGrid');
+  grid.innerHTML = '';
+
+  // Corner
+  const corner = document.createElement('div');
+  corner.className = 'plate-hdr';
+  grid.appendChild(corner);
+
+  // Column headers
+  COLS.forEach(c => {
+    const h = document.createElement('div');
+    h.className = 'plate-hdr';
+    h.textContent = c;
+    grid.appendChild(h);
+  });
+
+  ROWS.forEach(row => {
+    // Row header
+    const rh = document.createElement('div');
+    rh.className = 'plate-hdr';
+    rh.textContent = row;
+    grid.appendChild(rh);
+
+    COLS.forEach(col => {
+      const well = row + col;
+      const div = document.createElement('div');
+      div.className = 'plate-well';
+      div.dataset.well = well;
+
+      const hasData = wellsWithData.has(well);
+      if (!hasData) {
+        div.classList.add('empty');
+      } else {
+        div.classList.add('has-data');
+      }
+
+      div.addEventListener('mousedown', (e) => onPlateMouseDown(e, well));
+      div.addEventListener('mouseenter', () => onPlateMouseEnter(well));
+
+      grid.appendChild(div);
+    });
+  });
+
+  document.removeEventListener('mouseup', onPlateMouseUp);
+  document.addEventListener('mouseup', onPlateMouseUp);
+
+  updatePlateVisuals();
+}
+
+function onPlateMouseDown(e, well) {
+  if (e.button !== 0) return;
+  if (!wellsWithData.has(well)) return;
+  e.preventDefault();
+
+  if (e.shiftKey && lastClickedWell) {
+    // Range select
+    selectRange(lastClickedWell, well, e.ctrlKey || e.metaKey);
+  } else if (e.ctrlKey || e.metaKey) {
+    // Toggle
+    if (selectedWells.has(well)) selectedWells.delete(well);
+    else selectedWells.add(well);
+    lastClickedWell = well;
+  } else {
+    // Start drag or single select
+    isDragging = true;
+    dragStartWell = well;
+    selectedWells.clear();
+    selectedWells.add(well);
+    lastClickedWell = well;
+  }
+  updatePlateVisuals();
+  renderChart();
+}
+
+function onPlateMouseEnter(well) {
+  if (!isDragging || !dragStartWell) return;
+  if (!wellsWithData.has(well)) return;
+  selectRange(dragStartWell, well, false);
+  updatePlateVisuals();
+  renderChart();
+}
+
+function onPlateMouseUp() {
+  isDragging = false;
+  dragStartWell = null;
+}
+
+function selectRange(start, end, additive) {
+  const sr = ROWS.indexOf(start.charAt(0)), sc = COLS.indexOf(parseInt(start.substring(1)));
+  const er = ROWS.indexOf(end.charAt(0)), ec = COLS.indexOf(parseInt(end.substring(1)));
+  const minR = Math.min(sr, er), maxR = Math.max(sr, er);
+  const minC = Math.min(sc, ec), maxC = Math.max(sc, ec);
+
+  if (!additive) selectedWells.clear();
+  for (let r = minR; r <= maxR; r++) {
+    for (let c = minC; c <= maxC; c++) {
+      const w = ROWS[r] + COLS[c];
+      if (wellsWithData.has(w)) selectedWells.add(w);
+    }
+  }
+}
+
+function selectAllWithData() {
+  wellsWithData.forEach(w => selectedWells.add(w));
+  updatePlateVisuals();
+  renderChart();
+}
+
+function clearSelection() {
+  selectedWells.clear();
+  lastClickedWell = null;
+  updatePlateVisuals();
+  renderChart();
+}
+
+function updatePlateVisuals() {
+  const colorMap = getColorMap();
+  document.querySelectorAll('.plate-well').forEach(div => {
+    const well = div.dataset.well;
+    const isSelected = selectedWells.has(well);
+    div.classList.toggle('selected', isSelected);
+    if (isSelected && colorMap[well]) {
+      div.style.background = colorMap[well];
+      div.style.borderColor = colorMap[well];
+    } else {
+      div.style.background = '';
+      div.style.borderColor = '';
+    }
+  });
+  document.getElementById('selInfo').textContent = `${selectedWells.size} selected`;
+  renderLegend(colorMap);
+}
+
+function getColorMap() {
+  const map = {};
+  const sorted = [...selectedWells].sort((a, b) => {
+    const ra = ROWS.indexOf(a.charAt(0)), ca = parseInt(a.substring(1));
+    const rb = ROWS.indexOf(b.charAt(0)), cb = parseInt(b.substring(1));
+    return ra !== rb ? ra - rb : ca - cb;
+  });
+  sorted.forEach((w, i) => { map[w] = TRACE_COLORS[i % TRACE_COLORS.length]; });
+  return map;
+}
+
+function renderLegend(colorMap) {
+  const panel = document.getElementById('legendPanel');
+  const wells = Object.keys(colorMap);
+  if (wells.length === 0) {
+    panel.innerHTML = '';
+    return;
+  }
+  panel.innerHTML = wells.map(w => {
+    const d = mergedData.find(r => r.Well === w);
+    const info = d ? `Mg:${d.MgGlu} K:${d.KGlu}` : '';
+    return `<div class="legend-item"><div class="legend-swatch" style="background:${colorMap[w]}"></div>${w} <span style="color:var(--text3)">${info}</span></div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Time Parsing
+// ═══════════════════════════════════════════════════════════════════════════
+function parseTime(timeStr) {
+  const [h, m, s] = timeStr.split(':').map(Number);
+  return h * 3600 + m * 60 + (s || 0);
+}
+
+function formatHours(seconds) {
+  const h = seconds / 3600;
+  return h % 1 === 0 ? h.toFixed(0) : h.toFixed(1);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Curve Analysis
+// ═══════════════════════════════════════════════════════════════════════════
+function analyzeWell(wellData) {
+  const sorted = [...wellData].sort((a, b) => parseTime(a.Time) - parseTime(b.Time));
+  const times = sorted.map(d => parseTime(d.Time));
+  const vals = sorted.map(d => d.Measurement);
+  const n = vals.length;
+
+  const result = { inflections: [], asymptote: null, vmax: null, vmaxTime: null, vmaxIdx: null };
+  if (n < 5) return result;
+
+  // ── Asymptote: mean of last 15% of points (min 3) ──
+  const tailLen = Math.max(3, Math.floor(n * 0.15));
+  const tailVals = vals.slice(n - tailLen);
+  result.asymptote = Math.round(tailVals.reduce((s, v) => s + v, 0) / tailVals.length);
+
+  // ── Smooth with 5-point moving average for more robust derivatives ──
+  const smoothed = vals.map((v, i) => {
+    const w = 2; // half-window
+    let sum = 0, count = 0;
+    for (let j = Math.max(0, i - w); j <= Math.min(n - 1, i + w); j++) {
+      sum += vals[j]; count++;
+    }
+    return sum / count;
+  });
+
+  // ── First derivative (central difference) ──
+  // d1[i] corresponds to original index i+1
+  const d1 = [];
+  for (let i = 1; i < n - 1; i++) {
+    const dt = times[i + 1] - times[i - 1];
+    d1.push({ val: dt > 0 ? (smoothed[i + 1] - smoothed[i - 1]) / dt : 0, origIdx: i });
+  }
+
+  // ── Vmax: maximum of the first derivative ──
+  let maxD1 = -Infinity;
+  let maxD1Idx = 0;
+  d1.forEach((d, i) => {
+    if (d.val > maxD1) { maxD1 = d.val; maxD1Idx = i; }
+  });
+  if (maxD1 > 0) {
+    const oi = d1[maxD1Idx].origIdx;
+    result.vmax = maxD1;
+    result.vmaxTime = sorted[oi].Time;
+    result.vmaxIdx = oi;
+  }
+
+  // ── Second derivative ──
+  // d2[i] corresponds to d1 index i+1, original index i+2
+  const d2 = [];
+  for (let i = 1; i < d1.length - 1; i++) {
+    const dt = times[d1[i + 1].origIdx] - times[d1[i - 1].origIdx];
+    d2.push({ val: dt > 0 ? (d1[i + 1].val - d1[i - 1].val) / dt : 0, origIdx: d1[i].origIdx });
+  }
+
+  // ── Find ALL zero crossings of d2 (any sign change) ──
+  // Filter out noise: only keep crossings where |d1| at that point > 5% of max |d1|
+  const d1Max = Math.max(...d1.map(d => Math.abs(d.val)));
+  const noiseThreshold = d1Max * 0.05;
+
+  for (let i = 0; i < d2.length - 1; i++) {
+    const signChange = (d2[i].val > 0 && d2[i + 1].val <= 0) || (d2[i].val < 0 && d2[i + 1].val >= 0);
+    if (!signChange) continue;
+
+    // Pick the point closest to the zero crossing
+    const oi = Math.abs(d2[i].val) < Math.abs(d2[i + 1].val) ? d2[i].origIdx : d2[i + 1].origIdx;
+
+    // Find the matching d1 entry for noise filtering
+    const d1Entry = d1.find(d => d.origIdx === oi);
+    if (d1Entry && Math.abs(d1Entry.val) < noiseThreshold) continue;
+
+    if (oi >= 0 && oi < n) {
+      const direction = d2[i].val > 0 ? 'decel' : 'accel';
+      result.inflections.push({
+        idx: oi,
+        time: sorted[oi].Time,
+        val: Math.round(vals[oi]),
+        direction // 'decel' = concave-up→down, 'accel' = concave-down→up
+      });
+    }
+  }
+
+  // Deduplicate inflections that are within 2 timepoints of each other
+  result.inflections.sort((a, b) => a.idx - b.idx);
+  const deduped = [];
+  for (const inf of result.inflections) {
+    if (deduped.length === 0 || inf.idx - deduped[deduped.length - 1].idx > 2) {
+      deduped.push(inf);
+    } else if (Math.abs(vals[inf.idx]) > Math.abs(vals[deduped[deduped.length - 1].idx])) {
+      deduped[deduped.length - 1] = inf;
+    }
+  }
+  // Keep only the two earliest inflection points
+  result.inflections = deduped.slice(0, 2);
+
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Chart Rendering
+// ═══════════════════════════════════════════════════════════════════════════
+function renderChart() {
+  const canvas = document.getElementById('mainChart');
+  const empty = document.getElementById('chartEmpty');
+  const analysisPanel = document.getElementById('analysisPanel');
+
+  const chartLegend = document.getElementById('chartLegend');
+
+  if (selectedWells.size === 0) {
+    canvas.style.display = 'none';
+    empty.style.display = 'flex';
+    chartLegend.style.display = 'none';
+    analysisPanel.style.display = 'none';
+    currentAnalysisRows = [];
+    renderSummary();
+    if (mainChart) { mainChart.destroy(); mainChart = null; }
+    return;
+  }
+
+  canvas.style.display = 'block';
+  empty.style.display = 'none';
+  chartLegend.style.display = 'flex';
+
+  const colorMap = getColorMap();
+  const showInflection = document.getElementById('showInflection').checked;
+  const showAsymptote = document.getElementById('showAsymptote').checked;
+  const useSharedAxis = document.getElementById('yAxisMode').value === 'shared';
+
+  const datasets = [];
+  const analysisRows = [];
+  let globalMin = Infinity, globalMax = -Infinity;
+
+  // Collect all unique timepoints for shared x-axis
+  const allTimes = new Set();
+  mergedData.forEach(d => allTimes.add(d.Time));
+  const sortedTimes = [...allTimes].sort((a, b) => parseTime(a) - parseTime(b));
+  const timeLabels = sortedTimes.map(t => {
+    const s = parseTime(t);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return `${h}:${String(m).padStart(2, '0')}`;
+  });
+
+  const sortedWells = [...selectedWells].sort((a, b) => {
+    const ra = ROWS.indexOf(a.charAt(0)), ca = parseInt(a.substring(1));
+    const rb = ROWS.indexOf(b.charAt(0)), cb = parseInt(b.substring(1));
+    return ra !== rb ? ra - rb : ca - cb;
+  });
+
+  sortedWells.forEach((well, wi) => {
+    const wellData = mergedData.filter(d => d.Well === well);
+    if (wellData.length === 0) return;
+
+    const sorted = [...wellData].sort((a, b) => parseTime(a.Time) - parseTime(b.Time));
+    const color = colorMap[well];
+
+    // Map data to shared time axis
+    const timeMap = {};
+    sorted.forEach(d => { timeMap[d.Time] = d.Measurement; });
+    const data = sortedTimes.map(t => timeMap[t] !== undefined ? timeMap[t] : null);
+
+    data.forEach(v => {
+      if (v !== null) {
+        if (v < globalMin) globalMin = v;
+        if (v > globalMax) globalMax = v;
+      }
+    });
+
+    // Main trace
+    datasets.push({
+      label: well,
+      data: data,
+      borderColor: color,
+      borderWidth: 2,
+      fill: false,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      tension: 0.3,
+      order: 2
+    });
+
+    // Analysis
+    const analysis = analyzeWell(wellData);
+    const meta = wellData[0];
+
+    // Inflection point markers (all of them)
+    if (showInflection && analysis.inflections.length > 0) {
+      const inflData = sortedTimes.map(() => null);
+      analysis.inflections.forEach(inf => {
+        const tIdx = sortedTimes.indexOf(inf.time);
+        if (tIdx >= 0) inflData[tIdx] = inf.val;
+      });
+      datasets.push({
+        label: `${well} inflection`,
+        data: inflData,
+        borderColor: color,
+        backgroundColor: '#fff',
+        borderWidth: 2,
+        pointRadius: 6,
+        pointStyle: 'triangle',
+        pointHoverRadius: 8,
+        showLine: false,
+        order: 1
+      });
+    }
+
+    // Vmax marker (diamond)
+    if (showInflection && analysis.vmaxTime !== null) {
+      const vmaxData = sortedTimes.map(() => null);
+      const vmIdx = sortedTimes.indexOf(analysis.vmaxTime);
+      if (vmIdx >= 0) {
+        vmaxData[vmIdx] = sorted[analysis.vmaxIdx].Measurement;
+        datasets.push({
+          label: `${well} Vmax`,
+          data: vmaxData,
+          borderColor: color,
+          backgroundColor: color,
+          borderWidth: 2,
+          pointRadius: 7,
+          pointStyle: 'rectRot',
+          pointHoverRadius: 9,
+          showLine: false,
+          order: 0
+        });
+      }
+    }
+
+    // Asymptote line
+    if (showAsymptote && analysis.asymptote !== null) {
+      datasets.push({
+        label: `${well} asymptote`,
+        data: sortedTimes.map(() => analysis.asymptote),
+        borderColor: color,
+        borderWidth: 1,
+        borderDash: [6, 4],
+        fill: false,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        order: 3
+      });
+    }
+
+    // Format Vmax for display (RFU/hour)
+    const vmaxPerHour = analysis.vmax !== null ? (analysis.vmax * 3600) : null;
+
+    analysisRows.push({
+      well,
+      color,
+      mg: meta.MgGlu,
+      k: meta.KGlu,
+      final: Math.round(sorted[sorted.length - 1].Measurement),
+      asymptote: analysis.asymptote,
+      vmax: vmaxPerHour,
+      vmaxTime: analysis.vmaxTime,
+      inflections: analysis.inflections
+    });
+  });
+
+  // Render chart
+  if (mainChart) mainChart.destroy();
+
+  const yMin = useSharedAxis ? globalMin * 0.95 : undefined;
+  const yMax = useSharedAxis ? globalMax * 1.05 : undefined;
+
+  mainChart = new Chart(canvas, {
+    type: 'line',
+    data: { labels: timeLabels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(0,0,0,.85)',
+          padding: 10,
+          titleFont: { size: 12, weight: '600' },
+          bodyFont: { size: 11, family: "'JetBrains Mono', monospace" },
+          cornerRadius: 6,
+          filter: (item) => !item.dataset.label.includes('asymptote') && !item.dataset.label.includes('inflection') && !item.dataset.label.includes('Vmax'),
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y != null ? ctx.parsed.y.toLocaleString() : ''} RFU`
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Time (hours)', font: { size: 12, weight: '600' } },
+          ticks: { maxTicksLimit: 20, font: { size: 10 } },
+          grid: { color: 'rgba(0,0,0,.04)' }
+        },
+        y: {
+          min: yMin,
+          max: yMax,
+          title: { display: true, text: 'Fluorescence (RFU)', font: { size: 12, weight: '600' } },
+          ticks: { font: { size: 10 }, callback: v => v.toLocaleString() },
+          grid: { color: 'rgba(0,0,0,.06)' }
+        }
+      }
+    }
+  });
+
+  // Store for summary sidebar
+  currentAnalysisRows = analysisRows;
+
+  // Render analysis table + summary
+  renderAnalysisTable(analysisRows);
+  renderSummary();
+}
+
+function renderAnalysisTable(rows) {
+  const panel = document.getElementById('analysisPanel');
+  const table = document.getElementById('analysisTable');
+
+  if (rows.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+
+  // Find max number of inflection points across all wells for column headers
+  const maxInfl = Math.max(1, ...rows.map(r => r.inflections.length));
+  const inflHeaders = Array.from({length: maxInfl}, (_, i) => `<th>Inflection ${i + 1}</th>`).join('');
+
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th></th>
+        <th>Well</th>
+        <th>MgGlu</th>
+        <th>KGlu</th>
+        <th>Final RFU</th>
+        <th>Asymptote</th>
+        <th>Vmax (RFU/hr)</th>
+        <th>Vmax Time</th>
+        ${inflHeaders}
+      </tr>
+    </thead>
+    <tbody>
+      ${rows.map(r => {
+        const inflCells = Array.from({length: maxInfl}, (_, i) => {
+          const inf = r.inflections[i];
+          if (!inf) return '<td>--</td>';
+          const arrow = inf.direction === 'decel' ? '&#9662;' : '&#9652;';
+          return `<td>${inf.time} (${inf.val.toLocaleString()}) ${arrow}</td>`;
+        }).join('');
+        return `
+        <tr>
+          <td><div style="width:12px;height:12px;border-radius:2px;background:${r.color}"></div></td>
+          <td>${r.well}</td>
+          <td>${r.mg} mM</td>
+          <td>${r.k} mM</td>
+          <td>${r.final.toLocaleString()}</td>
+          <td>${r.asymptote !== null ? r.asymptote.toLocaleString() : '--'}</td>
+          <td>${r.vmax !== null ? Math.round(r.vmax).toLocaleString() : '--'}</td>
+          <td>${r.vmaxTime || '--'}</td>
+          ${inflCells}
+        </tr>`;
+      }).join('')}
+    </tbody>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Summary Sidebar
+// ═══════════════════════════════════════════════════════════════════════════
+function summaryMean(arr) {
+  if (arr.length === 0) return null;
+  return arr.reduce((s, v) => s + v, 0) / arr.length;
+}
+
+function summaryMedian(arr) {
+  if (arr.length === 0) return null;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function summaryGeoMean(arr) {
+  const pos = arr.filter(v => v > 0);
+  if (pos.length === 0) return null;
+  const logSum = pos.reduce((s, v) => s + Math.log(v), 0);
+  return Math.exp(logSum / pos.length);
+}
+
+function computeSummaryStat(values, method) {
+  const valid = values.filter(v => v !== null && v !== undefined && !isNaN(v));
+  if (valid.length === 0) return null;
+  if (method === 'mean') return summaryMean(valid);
+  if (method === 'median') return summaryMedian(valid);
+  if (method === 'geomean') return summaryGeoMean(valid);
+  return null;
+}
+
+function timeToSeconds(timeStr) {
+  const [h, m, s] = timeStr.split(':').map(Number);
+  return h * 3600 + m * 60 + (s || 0);
+}
+
+function secondsToTime(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.round(sec % 60);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function renderSummary() {
+  const container = document.getElementById('summaryContent');
+  const rows = currentAnalysisRows;
+
+  if (rows.length === 0) {
+    container.innerHTML = '<div class="summary-empty">Select wells to see summary statistics</div>';
+    return;
+  }
+
+  const method = document.getElementById('summaryMetric').value;
+  const methodLabel = { mean: 'Mean', median: 'Median', geomean: 'Geo. Mean' }[method];
+  const n = rows.length;
+
+  // Vmax (RFU/hr)
+  const vmaxVals = rows.map(r => r.vmax).filter(v => v !== null);
+  const avgVmax = computeSummaryStat(vmaxVals, method);
+
+  // Vmax Time (convert to seconds, average, convert back)
+  const vmaxTimeSecs = rows.map(r => r.vmaxTime ? timeToSeconds(r.vmaxTime) : null).filter(v => v !== null);
+  const avgVmaxTime = computeSummaryStat(vmaxTimeSecs, method);
+
+  // Inflection 1 time
+  const infl1Secs = rows.map(r => r.inflections[0] ? timeToSeconds(r.inflections[0].time) : null).filter(v => v !== null);
+  const avgInfl1Time = computeSummaryStat(infl1Secs, method);
+
+  // Inflection 2 time
+  const infl2Secs = rows.map(r => r.inflections[1] ? timeToSeconds(r.inflections[1].time) : null).filter(v => v !== null);
+  const avgInfl2Time = computeSummaryStat(infl2Secs, method);
+
+  function card(label, value, sub) {
+    return `<div class="summary-card">
+      <div class="summary-card-label">${label}</div>
+      <div class="summary-card-value">${value}</div>
+      ${sub ? `<div class="summary-card-sub">${sub}</div>` : ''}
+    </div>`;
+  }
+
+  container.innerHTML =
+    `<div style="font-size:.65rem;color:var(--text3);margin-bottom:8px;font-weight:600">${methodLabel} of ${n} well${n !== 1 ? 's' : ''}</div>` +
+    card(
+      'Vmax',
+      avgVmax !== null ? `${Math.round(avgVmax).toLocaleString()} <span style="font-size:.7rem;font-weight:500">RFU/hr</span>` : '--',
+      avgVmaxTime !== null ? `at ${secondsToTime(Math.round(avgVmaxTime))}` : null
+    ) +
+    card(
+      'Vmax Time',
+      avgVmaxTime !== null ? secondsToTime(Math.round(avgVmaxTime)) : '--',
+      vmaxTimeSecs.length > 0 ? `n = ${vmaxTimeSecs.length}` : null
+    ) +
+    card(
+      'Inflection 1 Time',
+      avgInfl1Time !== null ? secondsToTime(Math.round(avgInfl1Time)) : '--',
+      infl1Secs.length > 0 ? `n = ${infl1Secs.length}` : null
+    ) +
+    card(
+      'Inflection 2 Time',
+      avgInfl2Time !== null ? secondsToTime(Math.round(avgInfl2Time)) : '--',
+      infl2Secs.length > 0 ? `n = ${infl2Secs.length}` : null
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Export
+// ═══════════════════════════════════════════════════════════════════════════
+function exportScreenshot() {
+  const target = document.querySelector('.main-layout');
+  html2canvas(target, { scale: 2, useCORS: true }).then(canvas => {
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `${currentExpId || 'SO'}_timecourse.png`;
+    a.click();
+  }).catch(err => {
+    alert('Screenshot failed: ' + err.message);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Init
+// ═══════════════════════════════════════════════════════════════════════════
+init();
+</script>
+
+<script src="shared/help-widget.js"></script>
+<button class="help-fab" id="helpFab" onclick="toggleHelp()" title="Help">?</button>
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()"></div>
+<div class="help-modal" id="helpModal">
+  <button class="help-close" onclick="toggleHelp()">&times;</button>
+  <div class="help-modal-head"><h2>SO Time-Course &mdash; Help</h2><p>Kinetic fluorescence curves for salt optimization</p></div>
+  <div class="help-modal-body">
+<h3>Overview</h3>
+<p>This view shows fluorescence over time for each well in a salt optimization experiment, displayed as a grid of mini charts matching the plate layout.</p>
+<h3>Controls</h3>
+<ul>
+<li><strong>Experiment &amp; Lysate Lot</strong> &mdash; Select which experiment and lysate lot to view.</li>
+<li><strong>Y-Axis</strong> &mdash; <em>Shared</em> uses the same Y range across all wells for easy comparison. <em>Individual</em> auto-scales each well to show detail.</li>
+<li><strong>Inflection points</strong> &mdash; Marks the point of maximum growth rate on each curve (triangle marker).</li>
+<li><strong>Asymptotes</strong> &mdash; Shows the estimated plateau value as a dashed horizontal line.</li>
+</ul>
+<h3>Well Selector (Plate Map)</h3>
+<p>Click individual wells or click-and-drag to select a region. Wells with data are colored by their Mg/K condition. Only selected wells appear in the chart.</p>
+<h3>Chart</h3>
+<p>Each mini chart shows RFU vs. time for one well. Charts are arranged in a grid matching the plate layout. Hover a curve for exact values at each timepoint.</p>
+<h3>Summary Panel</h3>
+<p>Displays aggregate statistics for selected wells: mean endpoint fluorescence, top-performing well, and condition breakdown.</p>
+  </div>
+</div>
+
+<script src="tutorial.js"></script>
+</body>
+</html>

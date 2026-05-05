@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salt Optimization - 2D Heatmap</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/help-widget.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FAFAF8;--surface:#FFFFFF;--surface2:#F3F2EE;
+  --text:#1A1A18;--text2:#5C5B56;--text3:#8E8D88;
+  --teal:#0891B2;--teal-light:#CCFBF1;
+  --green:#1B6B4A;--border:#DDD9D1;--radius:10px;
+}
+html{font-family:'DM Sans',system-ui,sans-serif;font-size:15px;color:var(--text);background:var(--bg)}
+body{min-height:100vh}
+.mono{font-family:'JetBrains Mono',monospace}
+
+.navbar{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:1rem 1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;
+}
+.nav-btn{
+  padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);color:var(--text2);font-size:.8rem;font-weight:500;
+  text-decoration:none;cursor:pointer;transition:all .2s;font-family:inherit;
+  border:none;
+}
+.nav-btn:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-light)}
+
+.app{max-width:1400px;margin:0 auto;padding:2rem 1.5rem}
+
+.topbar{display:flex;align-items:center;gap:12px;margin-bottom:1.5rem;flex-wrap:wrap}
+.topbar h1{font-size:1.3rem;font-weight:700;flex:1}
+
+.controls{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1.5rem;align-items:center}
+.control-group{display:flex;align-items:center;gap:8px;font-size:.85rem}
+.control-group label{font-weight:500}
+.control-group input[type="checkbox"]{width:18px;height:18px;cursor:pointer}
+
+.heatmap-container{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:2rem;margin-bottom:2rem;overflow-x:auto;
+}
+
+#mainHeatmap{max-width:100%;height:auto}
+
+.legend-container{display:flex;gap:8px;align-items:center;margin-top:1.5rem;font-size:.85rem}
+.legend-scale{width:200px;height:20px;background:linear-gradient(to right,rgb(68,1,84),rgb(59,82,139),rgb(33,145,140),rgb(253,231,37));border:1px solid var(--border);border-radius:4px}
+
+.stats-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:2rem}
+.stats-section h3{margin-bottom:1rem;font-size:.95rem;font-weight:700}
+
+.top3-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.top3-table th{
+  text-align:left;padding:8px 12px;font-weight:600;color:var(--text3);
+  border-bottom:1.5px solid var(--border);background:var(--surface2);
+  font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;
+}
+.top3-table td{padding:8px 12px;border-bottom:1px solid var(--surface2)}
+.top3-table tr:hover{background:var(--surface2)}
+
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:2rem}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);color:var(--text2);font-size:.8rem;font-weight:600;
+  cursor:pointer;font-family:inherit;transition:all .2s;text-decoration:none;
+}
+.btn:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-light)}
+
+.loading{text-align:center;padding:3rem;color:var(--text3)}
+.spinner{display:inline-block;width:20px;height:20px;border:3px solid rgba(0,0,0,.1);border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── DB PUSH PANEL ── */
+.db-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-top:2rem}
+.db-panel h3{font-size:.95rem;font-weight:700;margin-bottom:.75rem}
+.db-desc{font-size:.8rem;color:var(--text3);margin-bottom:1rem}
+.gl-row{display:flex;gap:12px;margin-bottom:8px}
+.gl-field{flex:1}
+.gl-field label{display:block;font-size:.75rem;font-weight:600;color:var(--text3);margin-bottom:4px}
+.gl-field input{width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;font-family:'JetBrains Mono',monospace;background:var(--surface)}
+.gl-field input:focus{outline:none;border-color:var(--teal)}
+.gl-hint{font-weight:400;color:var(--text3);font-size:.7rem}
+.db-actions{display:flex;gap:12px;align-items:center;margin-top:1rem;flex-wrap:wrap}
+.db-status{font-size:.8rem;margin-top:.75rem;padding:8px 12px;border-radius:6px;display:none}
+.db-status.show{display:block}
+.db-status.ok{background:#E3F2EB;color:#1B6B4A}
+.db-status.err{background:#FEE2E2;color:#DC2626}
+.db-status.info{background:#DBEAFE;color:#1E40AF}
+
+
+</style>
+</head>
+<body>
+
+<div class="navbar">
+  <a class="nav-btn" href="so_tool.html">&larr; Back to SO Tool</a>
+  <a class="nav-btn" href="index.html">Home</a>
+  <a class="nav-btn" id="navTimecourse" href="so_timecourse.html">Time-Course &rarr;</a>
+  <span style="flex:1"></span>
+  <span style="font-size:.85rem;color:var(--text3)">2D Heatmap View</span>
+</div>
+
+<div class="app">
+
+<div class="topbar">
+  <h1>Mg/K Condition Heatmap</h1>
+  <span id="conditionCount" style="font-size:.9rem;color:var(--text3)"></span>
+</div>
+
+<div class="controls">
+  <div class="control-group">
+    <label for="expSelect">Experiment:</label>
+    <select id="expSelect" onchange="onExpChange()" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:.85rem;background:var(--surface);cursor:pointer">
+    </select>
+  </div>
+  <div class="control-group">
+    <label for="lysateSelect">Lysate Lot:</label>
+    <select id="lysateSelect" onchange="loadExperiment()" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);font-family:'JetBrains Mono',monospace;font-size:.85rem;background:var(--surface);cursor:pointer">
+    </select>
+  </div>
+  <div class="control-group">
+    <label for="metricSelect">Metric:</label>
+    <select id="metricSelect" onchange="renderHeatmap(); renderTop3Table()" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:.85rem;background:var(--surface);cursor:pointer">
+      <option value="mean">Mean</option>
+      <option value="geoMean">Geometric Mean</option>
+      <option value="max">Max</option>
+      <option value="min">Min</option>
+    </select>
+  </div>
+  <div class="control-group">
+    <input type="checkbox" id="showValues" checked onchange="renderHeatmap()">
+    <label for="showValues">Show values in cells</label>
+  </div>
+  <div class="control-group">
+    <input type="checkbox" id="logScale" onchange="renderHeatmap()">
+    <label for="logScale">Log scale</label>
+  </div>
+</div>
+
+<div id="expDescRow" style="padding:0 1rem .5rem;font-size:.82rem;color:var(--text2);font-style:italic;display:none"><span id="expDescText"></span> <button id="expDescEdit" onclick="editDesc()" title="Edit description" style="border:none;background:none;cursor:pointer;font-size:13px;color:var(--text3);padding:0 3px">&#9998;</button></div>
+<div id="expDescEditRow" style="padding:0 1rem .5rem;display:none"><input id="expDescInput" placeholder="Describe this experiment…" style="padding:4px 8px;font-size:.82rem;border:1px solid var(--teal);border-radius:6px;font-family:inherit;outline:none;width:300px"> <button onclick="commitDesc()" style="font-size:.78rem;padding:3px 10px;border-radius:6px;border:none;background:var(--teal);color:#fff;cursor:pointer;font-family:inherit;font-weight:600">Save</button> <button onclick="cancelDesc()" style="font-size:.78rem;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:inherit">Cancel</button> <span id="expDescMsg" style="font-size:.75rem;margin-left:6px"></span></div>
+
+<div class="heatmap-container" id="heatmapContainer">
+  <div class="loading">
+    <div class="spinner"></div>
+    <p style="margin-top:1rem">Loading data...</p>
+  </div>
+</div>
+
+<div class="stats-section">
+  <h3>Top 3 Conditions</h3>
+  <table class="top3-table" id="top3Table"></table>
+</div>
+
+<div class="actions">
+  <button class="btn" onclick="exportSVG()">&#8595; SVG</button>
+  <button class="btn" onclick="exportPNG()">&#8595; PNG</button>
+  <button class="btn" onclick="exportCSV('all')">&#8595; All Data CSV</button>
+  <button class="btn" onclick="exportCSV('top3')">&#8595; Top 3 CSV</button>
+</div>
+
+<div class="db-panel" id="dbPanel" style="display:none">
+  <h3>Push to database</h3>
+  <p class="db-desc">Commits a CSV to <code>data/P902_SO_Results/</code> in your GitLab repo. The pipeline rebuilds the database automatically.</p>
+  <div class="gl-row">
+    <div class="gl-field">
+      <label>Git Project ID</label>
+      <input type="text" id="soGlProject" placeholder="e.g. 12345678" spellcheck="false">
+    </div>
+    <div class="gl-field">
+      <label>Branch</label>
+      <input type="text" id="soGlBranch" value="main" spellcheck="false">
+    </div>
+  </div>
+  <div class="gl-field" style="margin-top:6px">
+    <label>Personal access token <span class="gl-hint">(api scope — stored in browser only)</span></label>
+    <div style="display:flex;gap:8px">
+      <input type="password" id="soGlToken" placeholder="ghp_xxxxxxxxxxxx" spellcheck="false" style="flex:1">
+      <button class="btn" onclick="toggleSOTokenVis()" id="soToggleTok" style="font-size:.75rem;padding:6px 10px">Show</button>
+      <button class="btn" onclick="clearSOGLSettings()" style="font-size:.75rem;padding:6px 10px;color:#DC2626;border-color:#DC2626">Clear</button>
+    </div>
+  </div>
+  <div class="db-actions">
+    <button class="btn" style="background:var(--teal);color:#fff;border-color:var(--teal)" id="soPushBtn" onclick="pushSOToDB()">Validate &amp; Push</button>
+    <button class="btn" onclick="pushSOToDB(true)">Download CSV only</button>
+  </div>
+  <div class="db-status" id="soDbStatus"></div>
+</div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script src="so_data.js"></script>
+<script src="repo_utils.js"></script>
+
+<script>
+let aggregatedData = null;
+let top3Data = null;
+let allData = null;
+let currentExpId = null;
+let currentLysate = null;
+let allExperiments = [];
+
+async function init() {
+  try {
+    allExperiments = await listAllExperiments();
+    const expSelect = document.getElementById('expSelect');
+
+    if (allExperiments.length === 0) {
+      document.getElementById('heatmapContainer').innerHTML = '<p style="padding:2rem;text-align:center;color:var(--text3)">No experiments found. <a href="so_tool.html">Upload files</a> first.</p>';
+      expSelect.innerHTML = '<option value="">No experiments</option>';
+      return;
+    }
+
+    // Populate experiment dropdown (unique IDs)
+    const uniqueIds = [...new Set(allExperiments.map(e => e.id))].sort();
+    expSelect.innerHTML = uniqueIds.map(id => `<option value="${id}">${id}</option>`).join('');
+
+    // Pre-select from URL params
+    const params = new URLSearchParams(window.location.search);
+    const urlExp = params.get('exp');
+    const urlLysate = params.get('lysate');
+    if (urlExp && uniqueIds.includes(urlExp)) expSelect.value = urlExp;
+
+    populateLysateDropdown(urlLysate);
+    await loadExperiment();
+  } catch (error) {
+    document.getElementById('heatmapContainer').innerHTML = `<p style="color:red;padding:2rem">Error: ${error.message}</p>`;
+  }
+}
+
+function populateLysateDropdown(preselect) {
+  const expId = document.getElementById('expSelect').value;
+  const lysateSelect = document.getElementById('lysateSelect');
+  const lysates = allExperiments.filter(e => e.id === expId).map(e => e.lysateLot);
+  const unique = [...new Set(lysates)].sort();
+  lysateSelect.innerHTML = unique.map(l => `<option value="${l}">${l || '(none)'}</option>`).join('');
+  if (preselect && unique.includes(preselect)) lysateSelect.value = preselect;
+}
+
+var _soDescs={};
+loadAllDescriptions().then(function(d){_soDescs=d||{};updateDescDisplay();});
+function updateDescDisplay(){
+  var eid=document.getElementById('expSelect').value;
+  var d=_soDescs[eid];var row=document.getElementById('expDescRow');var txt=document.getElementById('expDescText');
+  if(d&&d.description){txt.textContent=d.description;row.style.display='block';}else{txt.textContent='No description';row.style.display='block';}
+  document.getElementById('expDescEditRow').style.display='none';
+}
+function editDesc(){
+  var eid=document.getElementById('expSelect').value;var d=_soDescs[eid];
+  document.getElementById('expDescInput').value=d&&d.description||'';
+  document.getElementById('expDescEditRow').style.display='block';document.getElementById('expDescMsg').textContent='';
+  document.getElementById('expDescInput').focus();
+}
+function cancelDesc(){document.getElementById('expDescEditRow').style.display='none';}
+async function commitDesc(){
+  var eid=document.getElementById('expSelect').value;if(!eid)return;
+  var desc=document.getElementById('expDescInput').value.trim();if(!desc){cancelDesc();return;}
+  var msg=document.getElementById('expDescMsg');msg.textContent='Saving…';msg.style.color='var(--blue)';
+  try{await saveDescription(eid,desc,'');_soDescs[eid]={description:desc};updateDescDisplay();msg.textContent='Saved';msg.style.color='var(--green)';}
+  catch(e){msg.textContent='Error: '+e.message;msg.style.color='var(--red)';}
+}
+function onExpChange() {
+  populateLysateDropdown();
+  loadExperiment();
+  updateDescDisplay();
+}
+
+async function loadExperiment() {
+  const expId = document.getElementById('expSelect').value;
+  const lysateLot = document.getElementById('lysateSelect').value;
+  if (!expId) return;
+  currentExpId = expId;
+  currentLysate = lysateLot;
+  document.getElementById('navTimecourse').href = `so_timecourse.html?exp=${encodeURIComponent(expId)}&lysate=${encodeURIComponent(lysateLot)}`;
+
+  aggregatedData = await loadExperimentAggregatedData(expId, lysateLot);
+  allData = await loadExperimentMergedData(expId, lysateLot);
+
+  // Load metadata
+  const expMeta = await loadSOData(expKey(expId, lysateLot) + 'metadata');
+  currentMetadata = expMeta || null;
+
+  // Show push panel + load GL settings
+  document.getElementById('dbPanel').style.display = 'block';
+  loadSOGLSettings();
+
+  if (!aggregatedData) {
+    document.getElementById('heatmapContainer').innerHTML = '<p style="padding:2rem;text-align:center;color:var(--text3)">No data for this experiment.</p>';
+    return;
+  }
+
+  // Backfill geoMean for data processed before this field existed
+  if (aggregatedData.length > 0 && aggregatedData[0].geoMean === undefined) {
+    aggregatedData.forEach(d => { d.geoMean = d.mean; });
+  }
+
+  document.getElementById('conditionCount').textContent = `${aggregatedData.length} conditions`;
+  renderHeatmap();
+  renderTop3Table();
+}
+
+function getMetricKey() {
+  return document.getElementById('metricSelect').value;
+}
+
+function getMetricLabel(key) {
+  return { mean: 'Mean', geoMean: 'Geometric Mean', max: 'Max', min: 'Min' }[key] || 'Mean';
+}
+
+function renderHeatmap() {
+  const metric = getMetricKey();
+  const data = aggregatedData;
+  const mgValues = [...new Set(data.map(d => d.MgGlu))].sort((a, b) => a - b);
+  const kValues = [...new Set(data.map(d => d.KGlu))].sort((a, b) => a - b);
+
+  const cellSize = 50;
+  const width = 100 + kValues.length * cellSize;
+  const height = 100 + mgValues.length * cellSize;
+  const margin = { top: 50, right: 30, bottom: 80, left: 80 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+
+  // Clear
+  d3.select('#heatmapContainer').html('<svg id="mainHeatmap"></svg>');
+
+  const svg = d3.select('#mainHeatmap')
+    .attr('width', width)
+    .attr('height', height);
+
+  const g = svg.append('g')
+    .attr('transform', `translate(${margin.left},${margin.top})`);
+
+  const xScale = d3.scaleBand()
+    .domain(kValues)
+    .range([0, innerWidth])
+    .padding(0.02);
+
+  const yScale = d3.scaleBand()
+    .domain(mgValues)
+    .range([innerHeight, 0])
+    .padding(0.02);
+
+  const useLogScale = document.getElementById('logScale').checked;
+  const values = data.map(d => d[metric]);
+  const extent = useLogScale
+    ? [Math.log10(d3.min(values)), Math.log10(d3.max(values))]
+    : d3.extent(values);
+
+  const colorScale = d3.scaleSequential(d3.interpolateViridis)
+    .domain(extent);
+
+  // Cells
+  g.selectAll('rect.cell')
+    .data(data)
+    .enter()
+    .append('rect')
+    .attr('class', 'cell')
+    .attr('x', d => xScale(d.KGlu))
+    .attr('y', d => yScale(d.MgGlu))
+    .attr('width', xScale.bandwidth())
+    .attr('height', yScale.bandwidth())
+    .attr('fill', d => {
+      const val = useLogScale ? Math.log10(d[metric]) : d[metric];
+      return colorScale(val);
+    })
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 1)
+    .on('mouseover', (evt, d) => {
+      d3.select(evt.currentTarget).attr('stroke-width', 2).attr('stroke', 'var(--teal)');
+      showTooltip(evt, d);
+    })
+    .on('mouseout', (evt) => {
+      d3.select(evt.currentTarget).attr('stroke-width', 1).attr('stroke', '#fff');
+      hideTooltip();
+    });
+
+  // Values
+  if (document.getElementById('showValues').checked) {
+    g.selectAll('text.value')
+      .data(data)
+      .enter()
+      .append('text')
+      .attr('class', 'value')
+      .attr('x', d => xScale(d.KGlu) + xScale.bandwidth() / 2)
+      .attr('y', d => yScale(d.MgGlu) + yScale.bandwidth() / 2)
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('font-size', '10px')
+      .attr('font-weight', '500')
+      .attr('fill', '#fff')
+      .text(d => d[metric].toString().substring(0, 4));
+  }
+
+  // Top 3 markers (ranked by selected metric)
+  const sorted = [...data].sort((a, b) => b[metric] - a[metric]);
+  const top3 = sorted.slice(0, 3);
+  g.selectAll('text.star')
+    .data(top3)
+    .enter()
+    .append('text')
+    .attr('class', 'star')
+    .attr('x', d => xScale(d.KGlu) + xScale.bandwidth() - 6)
+    .attr('y', d => yScale(d.MgGlu) + 10)
+    .attr('font-size', '14px')
+    .attr('text-anchor', 'middle')
+    .attr('fill', '#FFD700')
+    .text('★');
+
+  // X axis
+  svg.append('g')
+    .attr('transform', `translate(${margin.left},${height - margin.bottom})`)
+    .call(d3.axisBottom(xScale))
+    .selectAll('text')
+    .attr('font-size', '12px');
+
+  svg.append('text')
+    .attr('x', margin.left + innerWidth / 2)
+    .attr('y', height - 20)
+    .attr('text-anchor', 'middle')
+    .attr('font-weight', '600')
+    .text('KGlu [mM]');
+
+  // Y axis
+  svg.append('g')
+    .attr('transform', `translate(${margin.left},${margin.top})`)
+    .call(d3.axisLeft(yScale))
+    .selectAll('text')
+    .attr('font-size', '12px');
+
+  svg.append('text')
+    .attr('transform', 'rotate(-90)')
+    .attr('x', -margin.top - innerHeight / 2)
+    .attr('y', 20)
+    .attr('text-anchor', 'middle')
+    .attr('font-weight', '600')
+    .text('MgGlu [mM]');
+
+  // Legend
+  const legendScale = d3.scaleLinear()
+    .domain(useLogScale ? extent : d3.extent(values))
+    .range([0, 200]);
+
+  const legendAxis = d3.axisBottom(legendScale).ticks(3);
+
+  const legend = svg.append('g')
+    .attr('transform', `translate(${margin.left},${height - 30})`);
+
+  legend.append('defs').append('linearGradient')
+    .attr('id', 'gradient')
+    .attr('x1', '0%')
+    .attr('x2', '100%')
+    .selectAll('stop')
+    .data(d3.range(0, 1.01, 0.1))
+    .enter()
+    .append('stop')
+    .attr('offset', d => d * 100 + '%')
+    .attr('stop-color', d => colorScale(useLogScale ? extent[0] + (extent[1] - extent[0]) * d : d3.min(values) + (d3.max(values) - d3.min(values)) * d));
+
+  legend.append('rect')
+    .attr('x', 0)
+    .attr('y', -20)
+    .attr('width', 200)
+    .attr('height', 15)
+    .attr('fill', 'url(#gradient)')
+    .attr('stroke', 'var(--border)');
+
+  legend.append('g')
+    .attr('transform', 'translate(0,0)')
+    .call(legendAxis)
+    .selectAll('text')
+    .attr('font-size', '11px');
+
+  legend.append('text')
+    .attr('x', 100)
+    .attr('y', 30)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', '11px')
+    .attr('fill', 'var(--text3)')
+    .text(useLogScale ? `${getMetricLabel(metric)} RFU (log10)` : `${getMetricLabel(metric)} RFU`);
+}
+
+function renderTop3Table() {
+  const metric = getMetricKey();
+  const metricLabel = getMetricLabel(metric);
+  const sorted = [...aggregatedData].sort((a, b) => b[metric] - a[metric]);
+  const top3 = sorted.slice(0, 3);
+  const table = document.getElementById('top3Table');
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>★</th>
+        <th>MgGlu [mM]</th>
+        <th>KGlu [mM]</th>
+        <th>${metricLabel} RFU</th>
+        <th>SD</th>
+        <th>CV%</th>
+        <th>n</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${top3.map((row, i) => `
+        <tr>
+          <td style="color:#FFD700;font-weight:700">${i + 1}</td>
+          <td class="mono">${row.MgGlu}</td>
+          <td class="mono">${row.KGlu}</td>
+          <td class="mono">${row[metric].toLocaleString()}</td>
+          <td class="mono">${row.sd}</td>
+          <td class="mono">${row.cv}</td>
+          <td class="mono">${row.n}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  `;
+}
+
+function showTooltip(evt, d) {
+  const tooltip = document.createElement('div');
+  tooltip.id = 'tooltip';
+  tooltip.style.cssText = `
+    position:fixed;top:${evt.clientY + 10}px;left:${evt.clientX + 10}px;
+    background:#333;color:#fff;padding:8px 12px;border-radius:4px;
+    font-size:12px;z-index:100;pointer-events:none;font-family:'JetBrains Mono',monospace;
+  `;
+  const metric = getMetricKey();
+  const metricLabel = getMetricLabel(metric);
+  tooltip.innerHTML = `MgGlu: ${d.MgGlu} mM<br>KGlu: ${d.KGlu} mM<br>${metricLabel}: ${d[metric].toLocaleString()}<br>Mean: ${d.mean.toLocaleString()} | GeoMean: ${d.geoMean.toLocaleString()}<br>Min: ${d.min.toLocaleString()} | Max: ${d.max.toLocaleString()}<br>SD: ${d.sd} | CV: ${d.cv}% | n: ${d.n}`;
+  document.body.appendChild(tooltip);
+}
+
+function hideTooltip() {
+  const el = document.getElementById('tooltip');
+  if (el) el.remove();
+}
+
+function exportSVG() {
+  const svgElement = document.getElementById('mainHeatmap');
+  const svgData = new XMLSerializer().serializeToString(svgElement);
+  const blob = new Blob([svgData], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${currentExpId || 'SO'}_heatmap.svg`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportPNG() {
+  html2canvas(document.getElementById('heatmapContainer')).then(canvas => {
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `${currentExpId || 'SO'}_heatmap.png`;
+    a.click();
+  });
+}
+
+function exportCSV(type) {
+  let csv;
+  if (type === 'top3') {
+    const metric = getMetricKey();
+    const sorted = [...aggregatedData].sort((a, b) => b[metric] - a[metric]);
+    const top3 = sorted.slice(0, 3).map((row, i) => ({ ...row, rank: i + 1 }));
+    csv = generateTop3CSV(top3);
+  } else {
+    csv = generateAllDataCSV(allData);
+  }
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const prefix = currentExpId || 'SO';
+  a.download = type === 'top3' ? `${prefix}_top3.csv` : `${prefix}_all_data.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  GitLab Settings & Push
+// ═══════════════════════════════════════════════════════════════════════════
+let currentMetadata = null;
+
+function loadSOGLSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem('gl_settings')||'{}');
+    if(s.project)document.getElementById('soGlProject').value=s.project;
+    if(s.branch)document.getElementById('soGlBranch').value=s.branch;
+    if(s.token)document.getElementById('soGlToken').value=s.token;
+  }catch(e){}
+}
+function saveSOGLSettings(){
+  const s={
+    project:document.getElementById('soGlProject').value.trim(),
+    branch:document.getElementById('soGlBranch').value.trim()||'main',
+    token:document.getElementById('soGlToken').value.trim()
+  };
+  try{localStorage.setItem('gl_settings',JSON.stringify(s));}catch(e){}
+  return s;
+}
+function clearSOGLSettings(){
+  try{localStorage.removeItem('gl_settings');}catch(e){}
+  document.getElementById('soGlProject').value='';
+  document.getElementById('soGlBranch').value='main';
+  document.getElementById('soGlToken').value='';
+}
+function toggleSOTokenVis(){
+  const inp=document.getElementById('soGlToken');
+  const btn=document.getElementById('soToggleTok');
+  if(inp.type==='password'){inp.type='text';btn.textContent='Hide';}
+  else{inp.type='password';btn.textContent='Show';}
+}
+
+function buildSOCSVRows(){
+  if(!allData||!allData.length) return{cols:[],rows:[]};
+  const expId=currentExpId||'';
+  const lysateLot=currentLysate||'';
+  const cols=['EXP_ID','LYSATE_LOT','WELL','TIME','MEASUREMENT','MGGLU_MM','KGLU_MM'];
+  const rows=allData.map(r=>({
+    EXP_ID:expId,
+    LYSATE_LOT:lysateLot,
+    WELL:r.Well,
+    TIME:r.Time,
+    MEASUREMENT:r.Measurement,
+    MGGLU_MM:r.MgGlu,
+    KGLU_MM:r.KGlu
+  }));
+  return{cols,rows};
+}
+
+function generateSOFilename(){
+  const expId=currentExpId||'SO';
+  const now=new Date();
+  const ts=now.toISOString().slice(0,16).replace(/[:T]/g,'-');
+  return expId+'_so_'+ts+'.csv';
+}
+
+async function pushSOToDB(downloadOnly){
+  const status=document.getElementById('soDbStatus');
+  const btn=document.getElementById('soPushBtn');
+  btn.disabled=true;
+  status.className='db-status show info';
+  status.innerHTML='<span class="spinner"></span> Validating\u2026';
+
+  try{
+    const{cols,rows}=buildSOCSVRows();
+    if(!rows.length){
+      status.className='db-status show err';status.innerHTML='No data to export.';btn.disabled=false;return;
+    }
+
+    let dbCols=null;
+    try{
+      const SQL=await initSqlJs({locateFile:f=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/'+f});
+      const resp=await fetch('cfps.db');
+      if(resp.ok){
+        const buf=await resp.arrayBuffer();
+        const db=new SQL.Database(new Uint8Array(buf));
+        const tables=db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='P902_SO_Results'");
+        if(tables.length&&tables[0].values.length){
+          const info=db.exec("PRAGMA table_info('P902_SO_Results')");
+          if(info.length) dbCols=info[0].values.map(r=>r[1].toLowerCase());
+        }
+        db.close();
+      }
+    }catch(e){dbCols=null;}
+
+    const outCols=cols.map(c=>c.toLowerCase());
+    let colsOK=true;
+    if(dbCols!==null){
+      const dbSet=new Set(dbCols.filter(c=>c!=='source_file'));
+      const outSet=new Set(outCols);
+      if([...dbSet].some(c=>!outSet.has(c))||[...outSet].some(c=>!dbSet.has(c))) colsOK=false;
+    }
+
+    if(!colsOK){
+      status.className='db-status show err';
+      status.innerHTML='<strong>Column mismatch</strong> \u2014 output columns don\'t match existing P902_SO_Results table.';
+      btn.disabled=false;return;
+    }
+
+    const csvString=Papa.unparse(rows);
+    const filename=generateSOFilename();
+
+    if(downloadOnly){
+      const blob=new Blob([csvString],{type:'text/csv'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download=filename;a.click();
+      URL.revokeObjectURL(url);
+      const label=dbCols?'Columns validated.':'No existing table \u2014 this will create the schema.';
+      status.className='db-status show ok';
+      status.innerHTML='Downloaded <strong>'+filename+'</strong> ('+rows.length+' rows). '+label;
+      btn.disabled=false;return;
+    }
+
+    const gl=saveSOGLSettings();
+    if(!gl.project||!gl.token){
+      status.className='db-status show err';
+      status.innerHTML='Fill in your GitHub repository and personal access token above.';
+      btn.disabled=false;return;
+    }
+
+    status.innerHTML='<span class="spinner"></span> Columns valid \u2014 pushing to GitHub\u2026';
+
+    const filePath='data/P902_SO_Results/'+filename;
+
+    // Check if file already exists (get SHA for updates)
+    let fileSha=null;
+    try{
+      const getResp=await fetch('https://api.github.com/repos/'+gl.project+'/contents/'+encodeURIComponent(filePath)+'?ref='+encodeURIComponent(gl.branch),{
+        headers:{'Authorization':'Bearer '+gl.token,'Accept':'application/vnd.github.v3+json'}
+      });
+      if(getResp.ok){const gd=await getResp.json();fileSha=gd.sha;}
+    }catch(e){}
+
+    const commitPayload={
+      message:'[SO] Add '+filename+' ('+rows.length+' rows)',
+      content:btoa(unescape(encodeURIComponent(csvString))),
+      branch:gl.branch
+    };
+    if(fileSha) commitPayload.sha=fileSha;
+
+    const resp=await fetch('https://api.github.com/repos/'+gl.project+'/contents/'+encodeURIComponent(filePath),{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+gl.token,'Accept':'application/vnd.github.v3+json'},
+      body:JSON.stringify(commitPayload)
+    });
+
+    if(resp.ok){
+      const data=await resp.json();
+      const shortSha=data.commit&&data.commit.sha?data.commit.sha.substring(0,8):'';
+      status.className='db-status show ok';
+      status.innerHTML='<strong>Pushed successfully</strong> \u2014 committed <code>'+filePath+'</code> ('+rows.length+' rows) to <code>'+gl.branch+'</code>'+(shortSha?' \u00b7 <code>'+shortSha+'</code>':'')+'. The pipeline will rebuild the database.';
+    }else{
+      const errData=await resp.json().catch(()=>({}));
+      const errMsg=errData.message||errData.error||resp.statusText;
+      status.className='db-status show err';
+      status.innerHTML='<strong>GitHub API error ('+resp.status+')</strong>: '+errMsg;
+    }
+    btn.disabled=false;
+  }catch(err){
+    status.className='db-status show err';
+    status.innerHTML='Error: '+err.message;
+    btn.disabled=false;
+  }
+}
+
+init();
+</script>
+
+<script src="shared/help-widget.js"></script>
+<button class="help-fab" id="helpFab" onclick="toggleHelp()" title="Help">?</button>
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()"></div>
+<div class="help-modal" id="helpModal">
+  <button class="help-close" onclick="toggleHelp()">&times;</button>
+  <div class="help-modal-head"><h2>SO Heatmap &mdash; Help</h2><p>Mg/K condition heatmap for salt optimization</p></div>
+  <div class="help-modal-body">
+<h3>Overview</h3>
+<p>This view displays a 2D heatmap of fluorescence values for each Mg/K concentration combination tested in a salt optimization experiment.</p>
+<h3>Controls</h3>
+<ul>
+<li><strong>Experiment &amp; Lysate Lot</strong> &mdash; Select which experiment to view. The dropdown lists experiments from your local cache and the database.</li>
+<li><strong>Metric</strong> &mdash; Choose Mean, Geometric Mean, Max, or Min fluorescence for the heatmap color scale.</li>
+<li><strong>Show values</strong> &mdash; Toggle numeric labels inside heatmap cells.</li>
+<li><strong>Log scale</strong> &mdash; Apply logarithmic color scaling for wide dynamic ranges.</li>
+</ul>
+<h3>Heatmap</h3>
+<p>Rows represent Mg concentrations, columns represent K concentrations. Color intensity maps to fluorescence. The top 3 performing conditions are starred. Hover any cell for exact values.</p>
+<h3>Top 3 Table</h3>
+<p>Shows the three best Mg/K combinations ranked by the selected metric, with mean, SD, CV%, and replicate count.</p>
+<h3>Export</h3>
+<ul>
+<li><strong>SVG / PNG</strong> &mdash; Download the heatmap as a vector or raster image.</li>
+<li><strong>All Data CSV</strong> &mdash; Export the full aggregated dataset.</li>
+<li><strong>Top 3 CSV</strong> &mdash; Export only the top 3 conditions.</li>
+</ul>
+<h3>Push to Database</h3>
+<p>Commits the merged time-course data as a CSV to <code>data/P902_SO_Results/</code> in your GitLab repo. The pipeline rebuilds the database automatically.</p>
+  </div>
+</div>
+
+<script src="tutorial.js"></script>
+</body>
+</html>

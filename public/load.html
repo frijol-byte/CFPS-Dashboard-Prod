@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/help-widget.css">
+<meta charset="UTF-8">
+<title>CFPS Dashboard — Load Data</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'IBM Plex Mono','SF Mono',monospace;background:#fff;color:#1e293b;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:40px}
+.wrap{text-align:center;max-width:520px;width:100%}
+.da{border:2px dashed #cbd5e1;border-radius:12px;padding:60px 40px;cursor:pointer;transition:border-color .2s,background .2s}
+.da:hover,.da.over{border-color:#2563eb;background:#f8fafc}
+.cb{display:none;margin-top:16px;padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;text-align:center}
+.cb.show{display:block}
+.btn{border:none;padding:8px 24px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.btn-primary{background:#2563eb;color:#fff}
+.btn-green{background:#059669;color:#fff}
+.btn-ghost{background:transparent;color:#64748b;border:1px solid #d1d5db;padding:6px 12px;font-size:10px}
+.loading{display:none;margin-top:20px;padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px}
+.loading.show{display:block}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid #bfdbfe;border-top-color:#2563eb;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.nav-back{margin-top:24px}
+.nav-back a{font-size:11px;color:#64748b;text-decoration:none}
+.nav-back a:hover{color:#2563eb}
+.home-btn{
+  position:fixed;top:16px;right:160px;z-index:50;
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border-radius:10px;
+  background:#fff;border:1px solid #d1d5db;
+  color:#64748b;font-size:11px;font-weight:600;
+  text-decoration:none;font-family:inherit;
+  transition:all .25s;box-shadow:0 2px 8px rgba(0,0,0,.04);
+}
+.home-btn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff;box-shadow:0 4px 12px rgba(37,99,235,.08)}
+.home-btn svg{width:14px;height:14px;flex-shrink:0}
+
+.db-section{margin-top:20px;border:2px solid #e2e8f0;border-radius:12px;padding:24px;background:#fafbfc;transition:border-color .2s}
+.db-section:hover{border-color:#7c3aed}
+.db-section .db-icon{width:40px;height:40px;border-radius:10px;background:#f3eefb;color:#7c3aed;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px}
+.db-section .db-title{font-size:14px;font-weight:700;margin-bottom:4px}
+.db-section .db-desc{font-size:11px;color:#64748b;margin-bottom:14px;line-height:1.5}
+.btn-purple{background:#7c3aed;color:#fff}
+.btn-purple:hover{background:#6d28d9}
+.db-status{display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:11px;font-weight:600;text-align:center}
+.db-status.show{display:block}
+.db-status.err{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
+.db-status.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
+.db-status.loading{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+
+.rebuild-section{margin-top:20px;border:2px solid #e2e8f0;border-radius:12px;padding:24px;background:#fafbfc;transition:border-color .2s}
+.rebuild-section:hover{border-color:#d97706}
+.rebuild-section .rb-icon{width:40px;height:40px;border-radius:10px;background:#fef3c7;color:#d97706;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px}
+.rebuild-section .rb-title{font-size:14px;font-weight:700;margin-bottom:4px}
+.rebuild-section .rb-desc{font-size:11px;color:#64748b;margin-bottom:14px;line-height:1.5}
+.btn-amber{background:#d97706;color:#fff}
+.btn-amber:hover{background:#b45309}
+.btn-amber:disabled{background:#d1d5db;cursor:not-allowed}
+.rb-filelist{margin:10px 0 14px;text-align:left;max-height:140px;overflow-y:auto}
+.rb-filelist .rb-file{display:flex;align-items:center;justify-content:space-between;padding:5px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;font-size:10px}
+.rb-filelist .rb-file .fname{font-weight:600;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px}
+.rb-filelist .rb-file .fmeta{color:#64748b;white-space:nowrap;margin-left:8px}
+.rb-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.rb-status{display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:11px;font-weight:600;text-align:center}
+.rb-status.show{display:block}
+.rb-status.err{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
+.rb-status.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
+.rb-status.loading{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+.rb-progress{width:100%;height:4px;background:#e2e8f0;border-radius:2px;margin-top:8px;overflow:hidden;display:none}
+.rb-progress.show{display:block}
+.rb-progress-bar{height:100%;background:#d97706;border-radius:2px;transition:width .3s}
+
+
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script src="data_loader.js"></script>
+</head>
+<body>
+<a class="home-btn" href="index.html">
+  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
+  Toolkit home
+</a>
+<div class="wrap">
+  <div class="da" id="da">
+    <div style="font-size:40px;margin-bottom:16px">🔬</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:6px">CFPS Dashboard</div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:20px">Drop a CSV file or click to browse</div>
+    <button class="btn btn-primary" onclick="document.getElementById('fi').click()">Choose CSV</button>
+    <input type="file" id="fi" accept=".csv" style="display:none">
+    <div id="cb" class="cb">
+      <div style="font-size:11px;color:#166534;font-weight:600;margin-bottom:4px">📋 Previously loaded data</div>
+      <div id="cd" style="font-size:10px;color:#15803d;margin-bottom:8px"></div>
+      <button class="btn btn-green" onclick="loadCached()" style="margin-right:6px">Load Cached → Dashboard</button>
+      <button class="btn btn-ghost" onclick="clearCache()">Clear</button>
+    </div>
+  </div>
+  <div id="loading" class="loading">
+    <span class="spinner"></span>
+    <span style="font-size:12px;color:#1e40af;font-weight:600">Parsing CSV & loading dashboard…</span>
+  </div>
+
+  <div class="db-section" id="dbSection">
+    <div class="db-icon">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="10" cy="5" rx="7.5" ry="2.8"/><path d="M2.5 5v4.2c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8V5"/><path d="M2.5 9.2v4.2c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8V9.2"/></svg>
+    </div>
+    <div class="db-title">Load from database</div>
+    <div class="db-desc">Pull data directly from the <code style="background:#e8e8e4;padding:1px 5px;border-radius:3px;font-size:10px">P902_Results</code> table in cfps.db — no file upload needed.</div>
+    <button class="btn btn-purple" onclick="loadFromDB()">Load from DB → Dashboard</button>
+    <div class="db-status" id="dbStatus"></div>
+  </div>
+
+  <div class="rebuild-section" id="rebuildSection">
+    <div class="rb-icon">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+    </div>
+    <div class="rb-title">Rebuild Database</div>
+    <div class="rb-desc">Scans all CSVs in <code style="background:#e8e8e4;padding:1px 5px;border-radius:3px;font-size:10px">data/P902_Results/</code> and rebuilds the table in cfps.db.
+      Other tables (lots, SO results) are preserved. Requires <code style="background:#e8e8e4;padding:1px 5px;border-radius:3px;font-size:10px">data_manifest.json</code>
+      — run <code style="background:#e8e8e4;padding:1px 5px;border-radius:3px;font-size:10px">python scripts/gen_manifest.py</code> after adding new CSVs.</div>
+
+    <div class="rb-filelist" id="rbFileList" style="display:none"></div>
+
+    <div class="rb-actions">
+      <button class="btn btn-amber" id="rbBuildBtn" onclick="rebuildDB()">Rebuild cfps.db</button>
+      <button class="btn btn-green" id="rbLoadBtn" onclick="loadRebuiltDB()" style="display:none">Load → Dashboard</button>
+      <a class="btn btn-ghost" id="rbDownloadBtn" style="display:none;text-decoration:none" download="cfps.db">Download cfps.db</a>
+    </div>
+
+    <div class="rb-progress" id="rbProgress"><div class="rb-progress-bar" id="rbProgressBar" style="width:0%"></div></div>
+    <div class="rb-status" id="rbStatus"></div>
+  </div>
+
+  <div class="nav-back" id="nav-back" style="display:none">
+    <a href="dashboard.html">← Back to Dashboard</a>
+  </div>
+</div>
+
+<script>
+
+// Check for cached data
+getCSV().then(function(c){
+  if(c){
+    var age=Date.now()-c.ts,h=Math.floor(age/36e5),m=Math.floor((age%36e5)/6e4);
+    document.getElementById('cd').textContent=c.fn+' — '+(h>0?h+'h '+m+'m ago':m+'m ago');
+    document.getElementById('cb').classList.add('show');
+    document.getElementById('nav-back').style.display='block';
+  }
+});
+
+function loadCached(){
+  document.getElementById('loading').classList.add('show');
+  getCSV().then(function(c){
+    if(c){
+      saveCSV(c.csv,c.fn,c.dbVersion||null,c.source||'db').then(function(){
+        window.location.href='dashboard.html';
+      });
+    }
+  });
+}
+
+function clearCache(){
+  delCSV();
+  document.getElementById('cb').classList.remove('show');
+  document.getElementById('nav-back').style.display='none';
+}
+
+// Drag & drop
+var da=document.getElementById('da');
+da.addEventListener('dragover',function(e){e.preventDefault();da.classList.add('over')});
+da.addEventListener('dragleave',function(){da.classList.remove('over')});
+da.addEventListener('drop',function(e){e.preventDefault();da.classList.remove('over');var f=e.dataTransfer.files[0];if(f)readF(f)});
+document.getElementById('fi').addEventListener('change',function(e){var f=e.target.files[0];if(f)readF(f)});
+
+function readF(file){
+  document.getElementById('loading').classList.add('show');
+  var r=new FileReader();
+  r.onload=function(e){
+    saveCSV(e.target.result,file.name,null,'file').then(function(){
+      window.location.href='dashboard.html';
+    });
+  };
+  r.readAsText(file);
+}
+
+// ── LOAD FROM SQLITE DB ──
+async function loadFromDB(){
+  var status=document.getElementById('dbStatus');
+  status.className='db-status show loading';
+  status.innerHTML='<span class="spinner"></span> Loading database…';
+
+  try{
+    // Get DB version for cache tracking
+    var dbVersion=null;
+    try{
+      var metaResp=await fetch('db_meta.json',{cache:'no-cache'});
+      if(metaResp.ok){var meta=await metaResp.json();dbVersion=meta.built_at||null;}
+    }catch(e){}
+
+    var SQL=await initSqlJs({locateFile:function(f){return 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/'+f}});
+    var resp=await fetch('cfps.db',{cache:'reload'});
+    if(!resp.ok) throw new Error('cfps.db not found. Run the pipeline first or add CSVs to data/P902_Results/.');
+    var buf=await resp.arrayBuffer();
+    var db=new SQL.Database(new Uint8Array(buf));
+
+    var tables=db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='P902_Results'");
+    if(!tables.length||!tables[0].values.length){
+      db.close();
+      throw new Error('No "P902_Results" table in the database. Push some processed data first.');
+    }
+
+    var result=db.exec("SELECT * FROM P902_Results");
+    db.close();
+
+    if(!result.length||!result[0].values.length){
+      throw new Error('The P902_Results table is empty.');
+    }
+
+    var cols=result[0].columns;
+    var rows=result[0].values;
+
+    var csv=cols.join(',')+'\n';
+    for(var i=0;i<rows.length;i++){
+      csv+=rows[i].map(function(v){
+        if(v===null) return '';
+        var s=String(v);
+        if(s.indexOf(',')>=0||s.indexOf('"')>=0||s.indexOf('\n')>=0)
+          return '"'+s.replace(/"/g,'""')+'"';
+        return s;
+      }).join(',')+'\n';
+    }
+
+    status.className='db-status show ok';
+    status.textContent='Loaded '+rows.length+' rows from database. Redirecting…';
+
+    await saveCSV(csv,'cfps.db \u2192 P902_Results ('+rows.length+' rows)',dbVersion,'db');
+    window.location.href='dashboard.html';
+  }catch(err){
+    status.className='db-status show err';
+    status.textContent=err.message;
+  }
+}
+
+// ── REBUILD DATABASE (manifest-based auto-discovery) ──
+var rebuiltDbBytes=null;
+
+// Path to staged CSVs inside public/data/
+var DATA_BASE='data/';
+
+function parseCSVText(text){
+  var lines=text.split(/\r?\n/);
+  var result=[];
+  for(var i=0;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    var row=[];var field='';var inQ=false;
+    for(var j=0;j<lines[i].length;j++){
+      var c=lines[i][j];
+      if(inQ){
+        if(c==='"'&&lines[i][j+1]==='"'){field+='"';j++;}
+        else if(c==='"'){inQ=false;}
+        else{field+=c;}
+      }else{
+        if(c==='"'){inQ=true;}
+        else if(c===','){row.push(field.trim());field='';}
+        else{field+=c;}
+      }
+    }
+    row.push(field.trim());
+    result.push(row);
+  }
+  return result;
+}
+
+function inferType(v){
+  if(v===''||v===null||v===undefined) return null;
+  if(/^-?\d+$/.test(v)) return parseInt(v,10);
+  var n=parseFloat(v);
+  if(!isNaN(n)&&String(n)===v) return n;
+  return v;
+}
+
+function sqlType(v){
+  if(typeof v==='number') return Number.isInteger(v)?'INTEGER':'REAL';
+  return 'TEXT';
+}
+
+function showRbFileList(files){
+  var list=document.getElementById('rbFileList');
+  list.style.display='block';list.innerHTML='';
+  files.forEach(function(f){
+    var div=document.createElement('div');div.className='rb-file';
+    div.innerHTML='<span class="fname">'+f.name+'</span><span class="fmeta">'+f.status+'</span>';
+    list.appendChild(div);
+  });
+}
+
+async function rebuildDB(){
+  var status=document.getElementById('rbStatus');
+  var prog=document.getElementById('rbProgress');
+  var pbar=document.getElementById('rbProgressBar');
+  pbar.style.background='#d97706';
+  status.className='rb-status show loading';
+  status.innerHTML='<span class="spinner"></span> Fetching data manifest…';
+  prog.classList.add('show');pbar.style.width='5%';
+  document.getElementById('rbLoadBtn').style.display='none';
+  document.getElementById('rbDownloadBtn').style.display='none';
+  document.getElementById('rbFileList').style.display='none';
+
+  try{
+    // 1. Fetch manifest
+    var mResp=await fetch('data_manifest.json');
+    if(!mResp.ok) throw new Error('data_manifest.json not found. Run:  python scripts/gen_manifest.py');
+    var manifest=await mResp.json();
+
+    var p902Files=manifest['P902_Results']||[];
+    if(!p902Files.length) throw new Error('Manifest lists no CSVs in P902_Results/. Add CSVs and re-run gen_manifest.py.');
+
+    // Show discovered files
+    var fileStatus=p902Files.map(function(f){return {name:f,status:'pending…'}});
+    showRbFileList(fileStatus);
+    pbar.style.width='10%';
+
+    // 2. Init sql.js and load existing DB (to preserve lots, SO tables, etc.)
+    status.innerHTML='<span class="spinner"></span> Loading sql.js + existing database…';
+    var SQL=await initSqlJs({locateFile:function(f){return 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/'+f}});
+    var db;
+    try{
+      var dbResp=await fetch('cfps.db');
+      if(dbResp.ok) db=new SQL.Database(new Uint8Array(await dbResp.arrayBuffer()));
+      else db=new SQL.Database();
+    }catch(e){ db=new SQL.Database(); }
+    pbar.style.width='15%';
+
+    // 3. Drop & rebuild P902_Results
+    status.innerHTML='<span class="spinner"></span> Dropping old P902_Results table…';
+    db.run('DROP TABLE IF EXISTS "P902_Results"');
+    pbar.style.width='20%';
+
+    var totalRows=0;
+    for(var fi=0;fi<p902Files.length;fi++){
+      var fname=p902Files[fi];
+      var pct=20+Math.round(((fi+1)/p902Files.length)*60);
+      status.innerHTML='<span class="spinner"></span> Fetching '+fname+' ('+(fi+1)+'/'+p902Files.length+')…';
+      fileStatus[fi].status='fetching…';
+      showRbFileList(fileStatus);
+
+      var csvResp=await fetch(DATA_BASE+'P902_Results/'+encodeURIComponent(fname));
+      if(!csvResp.ok){
+        fileStatus[fi].status='FAILED ('+csvResp.status+')';
+        showRbFileList(fileStatus);
+        pbar.style.width=pct+'%';
+        continue;
+      }
+      var text=await csvResp.text();
+      var parsed=parseCSVText(text);
+      if(parsed.length<2){fileStatus[fi].status='empty/skipped';showRbFileList(fileStatus);pbar.style.width=pct+'%';continue;}
+
+      var headers=parsed[0].map(function(h){return h.toLowerCase().replace(/ /g,'_')});
+      headers.push('source_file');
+
+      var rows=[];
+      for(var r=1;r<parsed.length;r++){
+        if(parsed[r].length!==headers.length-1) continue;
+        var row=parsed[r].map(function(v){return inferType(v)});
+        row.push(fname);
+        rows.push(row);
+      }
+
+      if(!rows.length){fileStatus[fi].status='0 rows';showRbFileList(fileStatus);pbar.style.width=pct+'%';continue;}
+
+      // Create table on first file, evolve schema on subsequent
+      var existing;
+      try{existing=db.exec('PRAGMA table_info("P902_Results")');} catch(e){existing=[];}
+      var existingCols=new Set();
+      if(existing.length) existing[0].values.forEach(function(c){existingCols.add(c[1])});
+
+      if(!existingCols.size){
+        var colDefs=headers.map(function(h,idx){
+          var sv=rows[0][idx]; return '"'+h+'" '+sqlType(sv);
+        }).join(', ');
+        db.run('CREATE TABLE "P902_Results" ('+colDefs+')');
+      }else{
+        headers.forEach(function(h,idx){
+          if(!existingCols.has(h)){
+            db.run('ALTER TABLE "P902_Results" ADD COLUMN "'+h+'" '+sqlType(rows[0]?rows[0][idx]:null));
+          }
+        });
+      }
+
+      var placeholders=headers.map(function(){return '?'}).join(',');
+      var colNames=headers.map(function(h){return '"'+h+'"'}).join(',');
+      db.run('BEGIN TRANSACTION');
+      var stmt=db.prepare('INSERT INTO "P902_Results" ('+colNames+') VALUES ('+placeholders+')');
+      for(var ri=0;ri<rows.length;ri++) stmt.run(rows[ri]);
+      stmt.free();
+      db.run('COMMIT');
+      totalRows+=rows.length;
+
+      fileStatus[fi].status=rows.length+' rows';
+      showRbFileList(fileStatus);
+      pbar.style.width=pct+'%';
+    }
+
+    pbar.style.width='90%';
+    status.innerHTML='<span class="spinner"></span> Exporting database…';
+
+    rebuiltDbBytes=db.export();
+    var countRes=db.exec('SELECT COUNT(*) FROM "P902_Results"');
+    var finalCount=countRes.length?countRes[0].values[0][0]:totalRows;
+    var tablesRes=db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
+    var tableCount=tablesRes.length?tablesRes[0].values.length:0;
+    db.close();
+
+    pbar.style.width='100%';
+    var loadedCount=fileStatus.filter(function(f){return /^\d/.test(f.status)}).length;
+    status.className='rb-status show ok';
+    status.textContent='Rebuilt P902_Results: '+finalCount.toLocaleString()+' rows from '+loadedCount+'/'+p902Files.length+' files ('+tableCount+' tables total).';
+
+    var blob=new Blob([rebuiltDbBytes],{type:'application/x-sqlite3'});
+    var dlBtn=document.getElementById('rbDownloadBtn');
+    if(dlBtn.href) URL.revokeObjectURL(dlBtn.href);
+    dlBtn.href=URL.createObjectURL(blob);
+    dlBtn.style.display='inline-block';
+    dlBtn.textContent='Download cfps.db ('+(rebuiltDbBytes.length/1024).toFixed(0)+' KB)';
+    document.getElementById('rbLoadBtn').style.display='inline-block';
+
+  }catch(err){
+    status.className='rb-status show err';
+    status.textContent='Error: '+err.message;
+    pbar.style.width='100%';pbar.style.background='#ef4444';
+  }
+}
+
+async function loadRebuiltDB(){
+  if(!rebuiltDbBytes) return;
+  var status=document.getElementById('rbStatus');
+  status.className='rb-status show loading';
+  status.innerHTML='<span class="spinner"></span> Loading into dashboard…';
+  try{
+    var SQL=await initSqlJs({locateFile:function(f){return 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/'+f}});
+    var db=new SQL.Database(rebuiltDbBytes);
+    var result=db.exec("SELECT * FROM P902_Results");
+    db.close();
+    if(!result.length||!result[0].values.length) throw new Error('P902_Results table is empty after rebuild.');
+    var cols=result[0].columns, rows=result[0].values;
+    var csv=cols.join(',')+'\n';
+    for(var i=0;i<rows.length;i++){
+      csv+=rows[i].map(function(v){
+        if(v===null) return '';
+        var s=String(v);
+        if(s.indexOf(',')>=0||s.indexOf('"')>=0||s.indexOf('\n')>=0) return '"'+s.replace(/"/g,'""')+'"';
+        return s;
+      }).join(',')+'\n';
+    }
+    status.className='rb-status show ok';
+    status.textContent='Loaded '+rows.length+' rows. Redirecting…';
+    await saveCSV(csv,'Rebuilt cfps.db \u2192 P902_Results ('+rows.length+' rows)',null,'db');
+    window.location.href='dashboard.html';
+  }catch(err){
+    status.className='rb-status show err';
+    status.textContent='Error: '+err.message;
+  }
+}
+</script>
+
+<script src="shared/help-widget.js"></script>
+<button class="help-fab" id="helpFab" onclick="toggleHelp()" title="Help">?</button>
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()"></div>
+<div class="help-modal" id="helpModal">
+  <button class="help-close" onclick="toggleHelp()">&times;</button>
+  <div class="help-modal-head"><h2>Load Data — Help</h2><p>Load experiment data into the CFPS Dashboard</p></div>
+  <div class="help-modal-body"><h3>Loading Options</h3>
+<ul>
+<li><strong>Upload CSV</strong> — Drag-and-drop or click to browse for a processed results CSV file. The file is cached in your browser so you can navigate between dashboard tabs without re-uploading.</li>
+<li><strong>Load from Database</strong> — Pull data directly from the <code>P902_Results</code> table in <code>cfps.db</code>. No file upload needed — the database is built automatically from CSVs in the repository.</li>
+<li><strong>Load Cached</strong> — If you previously loaded data, it's cached in your browser's IndexedDB. Click "Load Cached" to resume where you left off.</li>
+<li><strong>Rebuild Database</strong> — One-click rebuild of the <code>P902_Results</code> table from all CSVs in <code>data/P902_Results/</code>. The button reads <code>data_manifest.json</code> to discover files, fetches each CSV, and rebuilds the table in your browser using sql.js. Other tables (lots, SO results) are preserved. After adding new CSVs from the AbsQuant analyzer, run <code>python scripts/gen_manifest.py</code> to update the manifest, then click Rebuild.</li>
+</ul>
+
+<h3>After Loading</h3>
+<p>You'll be redirected to the Overview Dashboard automatically. From there, use the navigation tabs to access Curves &amp; Lots, Experiment deep dive, Raw Data, and Reproducibility views.</p>
+
+<h3>Clear Cache</h3>
+<p>Click "Clear" next to the cached data info to remove it from your browser and start fresh.</p></div>
+</div>
+<script src="tutorial.js"></script>
+</body>
+</html>

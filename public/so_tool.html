@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salt Optimization — JCM-Claude Toolkit</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/help-widget.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#F3F3F0;--surface:#FFFFFF;--surface2:#ECEAE4;--surface3:#E3E1DB;--text:#1a1a18;--text2:#4A4A45;--text3:#8A8A83;--green:#1B6B4A;--green-light:#E3F2EB;--blue:#1E6FA0;--blue-light:#E0EFF8;--red:#DC2626;--red-light:#FEE2E2;--teal:#0D7D8A;--teal-light:#D4F1F4;--teal-dark:#0A5F68;--border:#C8C6BF;--border-light:#DAD8D2;--radius:8px;--radius-sm:6px;--radius-xs:4px;--font:'DM Sans',system-ui,sans-serif;--mono:'JetBrains Mono',monospace}
+html{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;font-size:13px}
+body{min-height:100vh;display:flex;flex-direction:column}
+
+.topbar{display:flex;align-items:center;gap:10px;padding:6px 16px;background:var(--surface);border-bottom:2px solid var(--border);position:sticky;top:0;z-index:100}
+.topbar .home-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:var(--radius-xs);background:var(--surface);border:1px solid var(--border);color:var(--text3);font-size:11px;font-weight:600;text-decoration:none;font-family:inherit;transition:all .15s}
+.topbar .home-btn:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-light)}
+.topbar .title{font-size:14px;font-weight:700;letter-spacing:-.02em;color:var(--teal-dark)}
+.topbar .sep{width:1px;height:18px;background:var(--border)}
+.topbar .status{font-size:10px;font-family:var(--mono);margin-left:auto}
+.topbar .status.ok{color:var(--green)}.topbar .status.err{color:var(--red)}.topbar .status.wait{color:var(--text3)}
+
+.app{display:flex;flex:1;overflow:hidden;height:calc(100vh - 39px)}
+
+/* ── LEFT ── */
+.sidebar{width:220px;min-width:220px;background:var(--surface);border-right:2px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;font-size:12px}
+.sb-section{border-bottom:1px solid var(--border-light);padding:8px 10px}
+.sb-heading{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);margin-bottom:4px}
+.sb-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:4px}
+.sb-row.two{grid-template-columns:1fr 1fr}
+.sb-label{font-size:9px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-bottom:2px}
+.sb-input{padding:3px 5px;border:1px solid var(--border);border-radius:var(--radius-xs);font-size:10px;font-family:var(--mono);background:var(--surface);width:100%;color:var(--text)}
+.sb-input:focus{outline:none;border-color:var(--teal)}
+.sb-btn{padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--surface2);color:var(--text2);font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s;width:100%}
+.sb-btn:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-light)}
+.sb-btn.primary{border-color:var(--teal);background:var(--teal);color:white}
+.sb-btn.primary:hover{background:var(--teal-dark)}
+.sb-btn.danger{border-color:var(--red);color:var(--red);background:var(--red-light)}
+.sb-btn.danger:hover{background:var(--red);color:white}
+
+/* ── CENTER ── */
+.center{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.tab-bar{display:flex;align-items:center;gap:2px;padding:4px 12px;background:var(--surface);border-bottom:2px solid var(--border)}
+.tab-btn{padding:5px 14px;border:1px solid transparent;border-radius:var(--radius-xs);background:var(--surface);cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;color:var(--text3);transition:all .12s}
+.tab-btn:hover{background:var(--surface2);border-color:var(--border)}
+.tab-btn.active{background:var(--teal-light);border-color:var(--teal);color:var(--teal-dark)}
+.plate-info{display:flex;align-items:center;gap:8px;padding:4px 12px;background:var(--surface);border-bottom:1px solid var(--border-light);font-size:10px}
+.plate-info .label{font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text3)}
+.plate-info .info{font-family:var(--mono);color:var(--teal-dark);font-weight:600}
+.sel-bar{display:flex;align-items:center;gap:6px;padding:4px 12px;background:var(--green-light);border-bottom:1px solid var(--border-light);font-size:10px;font-weight:600;color:var(--green)}
+.sel-bar button{padding:2px 8px;border:1px solid var(--green);background:var(--green);color:white;border-radius:var(--radius-xs);font-size:10px;font-weight:600;cursor:pointer}
+.plate-wrap{flex:1;overflow:auto;padding:8px;background:var(--bg)}
+.plate-grid{display:grid;grid-template-columns:auto repeat(24,1fr);gap:1px;user-select:none;position:relative}
+.plate-hdr{font-size:8px;font-weight:700;color:var(--text3);display:flex;align-items:center;justify-content:center;padding:2px}
+.well{aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:var(--surface);border:1px solid var(--border-light);border-radius:2px;font-size:14px;font-weight:600;color:var(--text2);cursor:cell;transition:background .08s,border-color .08s;min-width:0;position:relative;font-family:var(--mono);overflow:hidden}
+.well:hover{border-color:var(--teal);z-index:1}
+.well.selected{background:var(--blue-light);border-color:var(--blue);z-index:2}
+.well.has-value{background:var(--teal-light);color:var(--teal-dark)}
+.well .main-val{font-size:inherit;font-weight:inherit;color:inherit}
+.well .other-val{position:absolute;top:0;right:1px;font-size:14px;font-weight:500;color:#9a9a94;line-height:1;pointer-events:none;font-family:var(--mono)}
+.well.editing{padding:0}
+.well.editing input{width:100%;height:100%;border:none;outline:none;text-align:center;font-size:14px;font-family:var(--mono);font-weight:600;background:var(--blue-light);color:var(--text)}
+.fill-handle{position:absolute;width:7px;height:7px;background:var(--teal);border:1px solid var(--surface);cursor:crosshair;z-index:20;pointer-events:auto}
+
+/* ── RIGHT ── */
+.right{width:240px;min-width:240px;background:var(--surface);border-left:2px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;font-size:12px}
+.rt-section{border-bottom:1px solid var(--border-light);padding:8px 10px}
+.rt-heading{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);margin-bottom:4px}
+.vol-row{display:flex;justify-content:space-between;padding:2px 0;font-size:10px}
+.vol-label{color:var(--text3);font-weight:600;text-transform:uppercase;font-size:9px}
+.vol-val{font-family:var(--mono);font-weight:600;color:var(--text)}
+.vol-divider{border-top:1px solid var(--border-light);margin:3px 0}
+.stat-row{display:flex;justify-content:space-between;padding:2px 0;font-size:10px}
+.stat-label{color:var(--text3);font-size:9px;text-transform:uppercase;font-weight:600}
+.stat-val{font-family:var(--mono);font-weight:600}
+.top3-table{width:100%;border-collapse:collapse;font-size:10px}
+.top3-table th{text-align:left;padding:3px 6px;font-weight:700;color:var(--text3);border-bottom:1px solid var(--border);font-size:9px;text-transform:uppercase}
+.top3-table td{padding:3px 6px;border-bottom:1px solid var(--border-light);font-family:var(--mono);font-size:10px}
+
+/* ── UPLOAD + BOTTOM ── */
+.upload-bar{display:flex;align-items:center;gap:8px;padding:5px 12px;background:var(--surface);border-bottom:2px solid var(--border)}
+.upload-zone{display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px dashed var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:all .15s;font-size:11px;color:var(--text2)}
+.upload-zone:hover{border-color:var(--teal);background:var(--teal-light);color:var(--teal-dark)}
+.upload-zone.loaded{border-style:solid;border-color:var(--green);background:var(--green-light);color:var(--green)}
+.upload-zone .fname{font-family:var(--mono);font-size:10px;font-weight:600}
+.bottom-bar{display:flex;align-items:center;gap:8px;padding:5px 12px;background:var(--surface);border-top:2px solid var(--border)}
+.bb-btn{padding:4px 10px;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--surface);color:var(--text2);font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.bb-btn:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-light)}
+.bb-btn.primary{border-color:var(--teal);background:var(--teal);color:white}
+.bb-btn.primary:hover{background:var(--teal-dark)}
+.spinner{display:inline-block;width:10px;height:10px;border:2px solid rgba(0,0,0,.1);border-top-color:currentColor;border-radius:50%;animation:spin .5s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+input[type="file"]{display:none}
+
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="home-btn" href="index.html">Home</a>
+  <div class="sep"></div>
+  <span class="title">Salt Optimization</span>
+  <div class="sep"></div>
+  <a class="home-btn" href="so_heatmap.html">SO Heatmap</a>
+  <a class="home-btn" href="so_timecourse.html">SO Timecourse</a>
+  <span class="status wait" id="globalStatus" style="margin-left:auto">ready</span>
+</div>
+
+<div class="upload-bar">
+  <div style="display:flex;align-items:center;gap:4px">
+    <label for="expId" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;white-space:nowrap">Exp ID</label>
+    <input class="sb-input" type="text" id="expId" value="" placeholder="e.g. E236" style="width:80px;font-size:11px">
+  </div>
+  <div style="display:flex;align-items:center;gap:4px">
+    <label for="lysateLot" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;white-space:nowrap">Lysate Lot</label>
+    <input class="sb-input" type="text" id="lysateLot" value="" placeholder="e.g. 17-L" style="width:80px;font-size:11px">
+  </div>
+  <div class="upload-zone" id="excelZone" onclick="document.getElementById('excelInput').click()">
+    <span>Excel Results</span>
+    <span class="fname" id="excelName">drop or click</span>
+  </div>
+  <div class="upload-zone" id="csvZone" onclick="document.getElementById('csvInput').click()">
+    <span>Layout CSV</span>
+    <span class="fname" id="csvName">optional</span>
+  </div>
+  <input type="file" id="excelInput" accept=".xlsx,.xls" onchange="handleExcel(event)">
+  <input type="file" id="csvInput" accept=".csv" onchange="handleCSV(event)">
+  <div style="flex:1"></div>
+  <button class="bb-btn primary" onclick="runPipeline()">Process</button>
+</div>
+<div id="expDescBar" style="padding:2px 12px;font-size:11px;color:var(--text3);font-style:italic;background:var(--surface2);border-bottom:1px solid var(--border-light);display:none"><span id="soDescText"></span> <button onclick="editSoDesc()" title="Edit description" style="border:none;background:none;cursor:pointer;font-size:12px;color:var(--text3);padding:0 2px">&#9998;</button></div>
+<div id="expDescEditBar" style="padding:3px 12px;background:var(--surface2);border-bottom:1px solid var(--border-light);display:none"><input id="soDescInput" placeholder="Describe this experiment…" style="padding:3px 7px;font-size:11px;border:1px solid var(--teal);border-radius:4px;font-family:var(--mono);outline:none;width:280px"> <button onclick="commitSoDesc()" style="font-size:10px;padding:2px 8px;border-radius:4px;border:none;background:var(--teal);color:#fff;cursor:pointer;font-family:inherit;font-weight:600">Save</button> <button onclick="cancelSoDesc()" style="font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:inherit">Cancel</button> <span id="soDescMsg" style="font-size:10px;margin-left:4px"></span></div>
+
+<div class="app">
+
+<!-- LEFT -->
+<div class="sidebar">
+  <div class="sb-section">
+    <div class="sb-heading">Recipe (µL)</div>
+    <div class="sb-row two">
+      <div><div class="sb-label">Total</div><input class="sb-input" type="number" id="totalVol" value="10" step="0.5"></div>
+      <div><div class="sb-label">MM</div><input class="sb-input" type="number" id="mmVol" value="2.5" step="0.5"></div>
+    </div>
+    <div class="sb-row two">
+      <div><div class="sb-label">Lysate</div><input class="sb-input" type="number" id="lysateVol" value="3" step="0.5"></div>
+      <div></div>
+    </div>
+  </div>
+  <div class="sb-section">
+    <div class="sb-heading">Stocks (mM)</div>
+    <div class="sb-row two">
+      <div><div class="sb-label">Mg</div><input class="sb-input" type="number" id="mgStock" value="200" step="10"></div>
+      <div><div class="sb-label">K</div><input class="sb-input" type="number" id="kStock" value="1600" step="100"></div>
+    </div>
+  </div>
+  <div class="sb-section">
+    <div class="sb-heading">Mg Range (by row)</div>
+    <div class="sb-row">
+      <input class="sb-input" type="number" id="mgStart" value="0" step="0.5" placeholder="Start">
+      <input class="sb-input" type="number" id="mgEnd" value="8" step="0.5" placeholder="End">
+      <input class="sb-input" type="number" id="mgStep" value="1" step="0.5" placeholder="Step">
+    </div>
+    <button class="sb-btn primary" onclick="fillMgRows()">Fill Rows</button>
+  </div>
+  <div class="sb-section">
+    <div class="sb-heading">K Range (by column)</div>
+    <div class="sb-row">
+      <input class="sb-input" type="number" id="kStart" value="100" step="10" placeholder="Start">
+      <input class="sb-input" type="number" id="kEnd" value="360" step="10" placeholder="End">
+      <input class="sb-input" type="number" id="kStep" value="20" step="10" placeholder="Step">
+    </div>
+    <button class="sb-btn primary" onclick="fillKCols()">Fill Columns</button>
+  </div>
+  <div class="sb-section">
+    <button class="sb-btn danger" onclick="clearMap()">Clear Current Map</button>
+    <button class="sb-btn" onclick="downloadLayoutCSV()" style="margin-top:4px">Export Layout CSV</button>
+  </div>
+</div>
+
+<!-- CENTER -->
+<div class="center">
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tabMg" onclick="switchTab('mg')">Mg [mM]</button>
+    <button class="tab-btn" id="tabK" onclick="switchTab('k')">K [mM]</button>
+    <div style="flex:1"></div>
+    <span class="label" style="font-size:9px;color:var(--text3)" id="fillSummary">Mg: 0 | K: 0</span>
+  </div>
+  <div class="plate-info">
+    <span class="label">Ctrl+C copy</span>
+    <span class="label">Ctrl+V paste</span>
+    <span class="label">Del clear</span>
+    <span class="label">Ctrl+D fill down</span>
+    <span class="label">Shift+click range</span>
+    <span class="label">Click cell to type</span>
+  </div>
+  <div class="sel-bar" id="selBar" style="display:none">
+    <span>Selected: <strong id="selCount">0</strong></span>
+  </div>
+  <div class="plate-wrap" id="plateWrap">
+    <div class="plate-grid" id="plateGrid"></div>
+  </div>
+</div>
+
+<!-- RIGHT -->
+<div class="right">
+  <div class="rt-section">
+    <div class="rt-heading">Recipe Preview</div>
+    <div id="recipePreview" style="color:var(--text3);font-size:10px">Click a well with both Mg and K</div>
+  </div>
+  <div class="rt-section" id="statsSection" style="display:none">
+    <div class="rt-heading">Processing Stats</div>
+    <div id="statsContent"></div>
+  </div>
+  <div class="rt-section" id="top3Section" style="display:none">
+    <div class="rt-heading">Top 3 Conditions</div>
+    <table class="top3-table" id="top3Table"></table>
+  </div>
+</div>
+
+</div>
+
+<div class="bottom-bar" id="bottomBar" style="display:none">
+  <a class="bb-btn primary" href="so_heatmap.html">Heatmap</a>
+  <a class="bb-btn primary" href="so_timecourse.html">Time-Course</a>
+  <div style="flex:1"></div>
+  <button class="bb-btn" onclick="exportAllCSV()">All Data CSV</button>
+  <button class="bb-btn" onclick="exportTop3CSV()">Top 3 CSV</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script src="so_data.js"></script>
+<script src="repo_utils.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  State
+// ═══════════════════════════════════════════════════════════════════════════
+const ROWS = 'ABCDEFGHIJKLMNOP'.split('');
+const COLS = Array.from({length:24},(_,i)=>i+1);
+
+let mgMap = {};   // { "A1": 0, ... }
+let kMap  = {};   // { "A1": 100, ... }
+let activeTab = 'mg';
+let selectedWells = new Set();
+let lastClickedWell = null;
+let isDragging = false;
+let dragStart = null;
+let wasDrag = false;
+let editingWell = null;
+let clipboardValue = null;
+
+// Fill handle state
+let fillHandleDragging = false;
+let fillHandleStart = null;  // {row, col}
+let fillHandleCurrent = null;
+
+let excelBuffer = null;
+let layoutCSV = null;
+let processingResult = null;
+
+function getActiveMap() { return activeTab === 'mg' ? mgMap : kMap; }
+function getOtherMap()  { return activeTab === 'mg' ? kMap  : mgMap; }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Tab Switching
+// ═══════════════════════════════════════════════════════════════════════════
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tabMg').classList.toggle('active', tab === 'mg');
+  document.getElementById('tabK').classList.toggle('active', tab === 'k');
+  commitEdit();
+  selectedWells.clear();
+  renderPlate();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Plate Rendering
+// ═══════════════════════════════════════════════════════════════════════════
+function renderPlate() {
+  const grid = document.getElementById('plateGrid');
+  grid.innerHTML = '';
+  const map = getActiveMap();
+  const other = getOtherMap();
+
+  // Find value range for coloring
+  const vals = Object.values(map).filter(v => v !== null && v !== undefined);
+  const vMin = vals.length ? Math.min(...vals) : 0;
+  const vMax = vals.length ? Math.max(...vals) : 1;
+
+  // Corner
+  const corner = document.createElement('div');
+  corner.className = 'plate-hdr';
+  grid.appendChild(corner);
+
+  // Column headers
+  COLS.forEach(c => {
+    const h = document.createElement('div');
+    h.className = 'plate-hdr';
+    h.textContent = c;
+    grid.appendChild(h);
+  });
+
+  ROWS.forEach(row => {
+    const rh = document.createElement('div');
+    rh.className = 'plate-hdr';
+    rh.textContent = row;
+    grid.appendChild(rh);
+
+    COLS.forEach(col => {
+      const well = row + col;
+      const div = document.createElement('div');
+      div.className = 'well';
+      div.dataset.well = well;
+      div.dataset.row = row;
+      div.dataset.col = col;
+
+      const val = map[well];
+      const hasVal = val !== undefined && val !== null;
+      const otherVal = other[well];
+      const hasOther = otherVal !== undefined && otherVal !== null;
+
+      if (hasOther) {
+        const lbl = document.createElement('span');
+        lbl.className = 'other-val';
+        lbl.textContent = otherVal;
+        lbl.title = (activeTab === 'mg' ? 'K: ' : 'Mg: ') + otherVal;
+        div.appendChild(lbl);
+      }
+
+      if (hasVal) {
+        div.classList.add('has-value');
+        const main = document.createElement('span');
+        main.className = 'main-val';
+        main.textContent = val;
+        div.appendChild(main);
+        if (vMax > vMin) {
+          const t = (val - vMin) / (vMax - vMin);
+          div.style.background = `rgba(13,125,138,${0.08 + t * 0.25})`;
+        }
+      }
+
+      if (selectedWells.has(well)) div.classList.add('selected');
+
+      // Events
+      div.addEventListener('mousedown', (e) => onWellMouseDown(e, well));
+      div.addEventListener('mouseenter', () => onWellMouseEnter(well));
+      div.addEventListener('dblclick', () => startEdit(well));
+
+      grid.appendChild(div);
+    });
+  });
+
+  // Single-click to select handled in mousedown
+  document.removeEventListener('mouseup', onGlobalMouseUp);
+  document.addEventListener('mouseup', onGlobalMouseUp);
+
+  updateSelBar();
+  updateFillSummary();
+  positionFillHandle();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Mouse Handling
+// ═══════════════════════════════════════════════════════════════════════════
+function onWellMouseDown(e, well) {
+  if (e.button !== 0) return;
+  commitEdit();
+
+  if (e.shiftKey && lastClickedWell) {
+    selectRect(lastClickedWell, well);
+    wasDrag = true;
+    return;
+  }
+
+  isDragging = true;
+  wasDrag = false;
+  dragStart = well;
+  selectedWells.clear();
+  selectedWells.add(well);
+  lastClickedWell = well;
+  updatePlateSelection();
+}
+
+function onWellMouseEnter(well) {
+  if (isDragging && dragStart) {
+    wasDrag = true;
+    selectRect(dragStart, well);
+  }
+  if (fillHandleDragging) {
+    fillHandleCurrent = parseWell(well);
+    highlightFillRange();
+  }
+}
+
+function onGlobalMouseUp() {
+  if (fillHandleDragging) {
+    executeFill();
+    fillHandleDragging = false;
+    fillHandleCurrent = null;
+    renderPlate();
+    return;
+  }
+  isDragging = false;
+  dragStart = null;
+  wasDrag = false;
+  updateSelBar();
+  positionFillHandle();
+
+  // Show recipe if the clicked well has both
+  if (lastClickedWell) {
+    const mg = mgMap[lastClickedWell];
+    const k = kMap[lastClickedWell];
+    if (mg !== undefined && mg !== null && k !== undefined && k !== null) {
+      showRecipePreview(mg, k);
+    }
+  }
+}
+
+function selectRect(start, end) {
+  const s = parseWell(start), e = parseWell(end);
+  const minR = Math.min(s.ri, e.ri), maxR = Math.max(s.ri, e.ri);
+  const minC = Math.min(s.ci, e.ci), maxC = Math.max(s.ci, e.ci);
+  selectedWells.clear();
+  for (let r = minR; r <= maxR; r++)
+    for (let c = minC; c <= maxC; c++)
+      selectedWells.add(ROWS[r] + COLS[c]);
+  updatePlateSelection();
+}
+
+function updatePlateSelection() {
+  document.querySelectorAll('.well').forEach(div => {
+    div.classList.toggle('selected', selectedWells.has(div.dataset.well));
+  });
+  updateSelBar();
+  positionFillHandle();
+}
+
+function updateSelBar() {
+  const bar = document.getElementById('selBar');
+  if (selectedWells.size > 0) {
+    document.getElementById('selCount').textContent = selectedWells.size;
+    bar.style.display = 'flex';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function parseWell(w) {
+  const row = w.charAt(0);
+  const col = parseInt(w.substring(1));
+  return { row, col, ri: ROWS.indexOf(row), ci: COLS.indexOf(col) };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Inline Editing
+// ═══════════════════════════════════════════════════════════════════════════
+function startEdit(well) {
+  commitEdit();
+  editingWell = well;
+  const div = document.querySelector(`.well[data-well="${well}"]`);
+  if (!div) return;
+  div.classList.add('editing');
+  const map = getActiveMap();
+  const curVal = map[well];
+  div.innerHTML = '';
+  const inp = document.createElement('input');
+  inp.type = 'number';
+  inp.step = activeTab === 'mg' ? '0.5' : '10';
+  inp.value = curVal !== undefined && curVal !== null ? curVal : '';
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { commitEdit(); }
+    if (e.key === 'Escape') { editingWell = null; renderPlate(); }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      commitEdit();
+      // Move to next cell
+      const p = parseWell(well);
+      const nextCol = p.ci + 1;
+      if (nextCol < COLS.length) {
+        const next = ROWS[p.ri] + COLS[nextCol];
+        selectedWells.clear();
+        selectedWells.add(next);
+        lastClickedWell = next;
+        renderPlate();
+        startEdit(next);
+      }
+    }
+  });
+  div.appendChild(inp);
+  inp.focus();
+  inp.select();
+}
+
+function commitEdit() {
+  if (!editingWell) return;
+  const inp = document.querySelector(`.well[data-well="${editingWell}"] input`);
+  if (inp) {
+    const v = parseFloat(inp.value);
+    const map = getActiveMap();
+    if (!isNaN(v)) {
+      map[editingWell] = v;
+    } else {
+      delete map[editingWell];
+    }
+  }
+  editingWell = null;
+  renderPlate();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Fill Handle
+// ═══════════════════════════════════════════════════════════════════════════
+function positionFillHandle() {
+  // Remove existing handle
+  document.querySelectorAll('.fill-handle').forEach(h => h.remove());
+  if (selectedWells.size === 0) return;
+
+  // Find bottom-right corner of selection
+  let maxR = -1, maxC = -1;
+  selectedWells.forEach(w => {
+    const p = parseWell(w);
+    if (p.ri > maxR || (p.ri === maxR && p.ci > maxC)) { maxR = p.ri; maxC = p.ci; }
+  });
+
+  const cornerWell = ROWS[maxR] + COLS[maxC];
+  const div = document.querySelector(`.well[data-well="${cornerWell}"]`);
+  if (!div) return;
+
+  const handle = document.createElement('div');
+  handle.className = 'fill-handle';
+  handle.style.cssText = `position:absolute;bottom:-3px;right:-3px;`;
+
+  handle.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    fillHandleDragging = true;
+    fillHandleStart = { ri: maxR, ci: maxC };
+  });
+
+  div.style.position = 'relative';
+  div.appendChild(handle);
+}
+
+function highlightFillRange() {
+  // Visual feedback during fill drag would require extra DOM — skip for now
+}
+
+function executeFill() {
+  if (!fillHandleStart || !fillHandleCurrent) return;
+  const map = getActiveMap();
+
+  // Determine selection bounds
+  let minR = Infinity, maxR = -1, minC = Infinity, maxC = -1;
+  selectedWells.forEach(w => {
+    const p = parseWell(w);
+    minR = Math.min(minR, p.ri); maxR = Math.max(maxR, p.ri);
+    minC = Math.min(minC, p.ci); maxC = Math.max(maxC, p.ci);
+  });
+
+  const targetR = fillHandleCurrent.ri;
+  const targetC = fillHandleCurrent.ci;
+
+  // Determine fill direction
+  if (targetR > maxR) {
+    // Fill down
+    for (let c = minC; c <= maxC; c++) {
+      const colVals = [];
+      for (let r = minR; r <= maxR; r++) {
+        const v = map[ROWS[r] + COLS[c]];
+        if (v !== undefined && v !== null) colVals.push(v);
+      }
+      const inc = colVals.length >= 2 ? colVals[colVals.length - 1] - colVals[colVals.length - 2] : 0;
+      let lastVal = colVals.length ? colVals[colVals.length - 1] : 0;
+      for (let r = maxR + 1; r <= targetR; r++) {
+        lastVal += inc;
+        map[ROWS[r] + COLS[c]] = Math.round(lastVal * 1000) / 1000;
+      }
+    }
+  } else if (targetC > maxC) {
+    // Fill right
+    for (let r = minR; r <= maxR; r++) {
+      const rowVals = [];
+      for (let c = minC; c <= maxC; c++) {
+        const v = map[ROWS[r] + COLS[c]];
+        if (v !== undefined && v !== null) rowVals.push(v);
+      }
+      const inc = rowVals.length >= 2 ? rowVals[rowVals.length - 1] - rowVals[rowVals.length - 2] : 0;
+      let lastVal = rowVals.length ? rowVals[rowVals.length - 1] : 0;
+      for (let c = maxC + 1; c <= targetC; c++) {
+        lastVal += inc;
+        map[ROWS[r] + COLS[c]] = Math.round(lastVal * 1000) / 1000;
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Ctrl+D Fill Down
+// ═══════════════════════════════════════════════════════════════════════════
+document.addEventListener('keydown', (e) => {
+  // Type into selected cell: number keys, minus, period
+  if (!editingWell && selectedWells.size === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (/^[0-9.\-]$/.test(e.key)) {
+      const well = [...selectedWells][0];
+      startEdit(well);
+      // Replace the value with the typed key
+      requestAnimationFrame(() => {
+        const inp = document.querySelector(`.well[data-well="${well}"] input`);
+        if (inp) { inp.value = e.key === '-' ? '-' : e.key; }
+      });
+      e.preventDefault();
+      return;
+    }
+  }
+  // Ctrl+C — copy value from selected cell
+  if (e.ctrlKey && e.key === 'c' && !editingWell && selectedWells.size >= 1) {
+    e.preventDefault();
+    const map = getActiveMap();
+    const well = lastClickedWell || [...selectedWells][0];
+    const val = map[well];
+    if (val !== undefined && val !== null) {
+      clipboardValue = val;
+      const status = document.getElementById('globalStatus');
+      status.className = 'status ok';
+      status.textContent = `copied ${val}`;
+      setTimeout(() => { status.className = 'status wait'; status.textContent = 'ready'; }, 1200);
+    }
+    return;
+  }
+
+  // Ctrl+V — paste copied value to all selected cells
+  if (e.ctrlKey && e.key === 'v' && !editingWell && selectedWells.size >= 1 && clipboardValue !== null) {
+    e.preventDefault();
+    const map = getActiveMap();
+    selectedWells.forEach(w => { map[w] = clipboardValue; });
+    renderPlate();
+    return;
+  }
+
+  // Delete / Backspace — clear selected cells
+  if ((e.key === 'Delete' || e.key === 'Backspace') && !editingWell && selectedWells.size >= 1) {
+    e.preventDefault();
+    const map = getActiveMap();
+    selectedWells.forEach(w => { delete map[w]; });
+    renderPlate();
+    return;
+  }
+
+  if (e.ctrlKey && e.key === 'd' && selectedWells.size > 1) {
+    e.preventDefault();
+    const map = getActiveMap();
+
+    let minR = Infinity, maxR = -1, minC = Infinity, maxC = -1;
+    selectedWells.forEach(w => {
+      const p = parseWell(w);
+      minR = Math.min(minR, p.ri); maxR = Math.max(maxR, p.ri);
+      minC = Math.min(minC, p.ci); maxC = Math.max(maxC, p.ci);
+    });
+
+    // Copy top row values down through selection
+    for (let c = minC; c <= maxC; c++) {
+      const srcWell = ROWS[minR] + COLS[c];
+      const val = map[srcWell];
+      if (val !== undefined && val !== null) {
+        for (let r = minR + 1; r <= maxR; r++) {
+          map[ROWS[r] + COLS[c]] = val;
+        }
+      }
+    }
+    renderPlate();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Range Fill (entire plate)
+// ═══════════════════════════════════════════════════════════════════════════
+function fillMgRows() {
+  const s = parseFloat(document.getElementById('mgStart').value) || 0;
+  const e = parseFloat(document.getElementById('mgEnd').value) || 8;
+  const st = parseFloat(document.getElementById('mgStep').value) || 1;
+
+  const vals = [];
+  for (let v = s; v <= e + 0.001; v += st) vals.push(Math.round(v * 100) / 100);
+
+  ROWS.forEach((row, ri) => {
+    if (ri < vals.length) {
+      COLS.forEach(col => { mgMap[row + col] = vals[ri]; });
+    }
+  });
+
+  if (activeTab === 'mg') renderPlate(); else updateFillSummary();
+}
+
+function fillKCols() {
+  const s = parseFloat(document.getElementById('kStart').value) || 100;
+  const e = parseFloat(document.getElementById('kEnd').value) || 360;
+  const st = parseFloat(document.getElementById('kStep').value) || 20;
+
+  const vals = [];
+  for (let v = s; v <= e + 0.5; v += st) vals.push(Math.round(v * 100) / 100);
+
+  COLS.forEach((col, ci) => {
+    if (ci < vals.length) {
+      ROWS.forEach(row => { kMap[row + col] = vals[ci]; });
+    }
+  });
+
+  if (activeTab === 'k') renderPlate(); else updateFillSummary();
+}
+
+function clearMap() {
+  if (activeTab === 'mg') { mgMap = {}; } else { kMap = {}; }
+  renderPlate();
+}
+
+function updateFillSummary() {
+  const mgCount = Object.keys(mgMap).length;
+  const kCount = Object.keys(kMap).length;
+  document.getElementById('fillSummary').textContent = `Mg: ${mgCount} | K: ${kCount}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Recipe Preview
+// ═══════════════════════════════════════════════════════════════════════════
+function showRecipePreview(mg, k) {
+  const total = parseFloat(document.getElementById('totalVol').value) || 10;
+  const mm = parseFloat(document.getElementById('mmVol').value) || 2.5;
+  const lys = parseFloat(document.getElementById('lysateVol').value) || 3;
+  const mgSt = parseFloat(document.getElementById('mgStock').value) || 200;
+  const kSt = parseFloat(document.getElementById('kStock').value) || 1600;
+  const mgVol = (mg * total) / mgSt;
+  const kVol = (k * total) / kSt;
+  const water = total - mm - lys - mgVol - kVol;
+  document.getElementById('recipePreview').innerHTML = `
+    <div class="vol-row"><span class="vol-label">Total</span><span class="vol-val">${total.toFixed(1)} µL</span></div>
+    <div class="vol-divider"></div>
+    <div class="vol-row"><span class="vol-label">MM</span><span class="vol-val">${mm.toFixed(1)} µL</span></div>
+    <div class="vol-row"><span class="vol-label">Lysate</span><span class="vol-val">${lys.toFixed(1)} µL</span></div>
+    <div class="vol-divider"></div>
+    <div class="vol-row"><span class="vol-label">Mg (${mgSt}mM)</span><span class="vol-val">${mgVol.toFixed(4)} µL</span></div>
+    <div class="vol-row"><span class="vol-label">K (${kSt}mM)</span><span class="vol-val">${kVol.toFixed(4)} µL</span></div>
+    <div class="vol-row"><span class="vol-label">Water</span><span class="vol-val">${water.toFixed(4)} µL</span></div>
+    <div class="vol-divider"></div>
+    <div class="vol-row"><span class="vol-label">[Mg] final</span><span class="vol-val">${mg} mM</span></div>
+    <div class="vol-row"><span class="vol-label">[K] final</span><span class="vol-val">${k} mM</span></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  File Uploads
+// ═══════════════════════════════════════════════════════════════════════════
+function handleExcel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    excelBuffer = e.target.result;
+    document.getElementById('excelZone').classList.add('loaded');
+    document.getElementById('excelName').textContent = file.name;
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function handleCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    layoutCSV = e.target.result;
+    document.getElementById('csvZone').classList.add('loaded');
+    document.getElementById('csvName').textContent = file.name;
+  };
+  reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Pipeline
+// ═══════════════════════════════════════════════════════════════════════════
+async function runPipeline() {
+  if (!excelBuffer) { alert('Upload an Excel file first'); return; }
+
+  let layoutData;
+  if (layoutCSV) {
+    layoutData = parseLayoutCSV(layoutCSV);
+  } else if (Object.keys(mgMap).length > 0 && Object.keys(kMap).length > 0) {
+    layoutData = parseLayoutFromBuilder(mgMap, kMap);
+  } else {
+    alert('Provide a plate layout: upload a CSV or fill both Mg and K maps.');
+    return;
+  }
+
+  if (layoutData.length === 0) {
+    alert('No wells have both Mg and K assigned.');
+    return;
+  }
+
+  const status = document.getElementById('globalStatus');
+  status.className = 'status wait';
+  status.innerHTML = '<span class="spinner"></span> processing...';
+
+  const expId = document.getElementById('expId').value.trim();
+  if (!expId) { alert('Enter an Experiment ID'); status.className = 'status wait'; status.textContent = 'ready'; return; }
+  const lysateLot = document.getElementById('lysateLot').value.trim();
+  if (!lysateLot) { alert('Enter a Lysate Lot'); status.className = 'status wait'; status.textContent = 'ready'; return; }
+
+  try {
+    processingResult = await processSaltOptimizationData(excelBuffer, layoutData);
+    processingResult.metadata.lysateLot = lysateLot;
+    await saveExperimentData(expId, lysateLot, processingResult);
+    status.className = 'status ok';
+    status.textContent = 'done — redirecting to heatmap…';
+    window.location.href = `so_heatmap.html?exp=${encodeURIComponent(expId)}&lysate=${encodeURIComponent(lysateLot)}`;
+  } catch (err) {
+    status.className = 'status err';
+    status.textContent = 'error';
+    alert('Processing failed: ' + err.message);
+  }
+}
+
+function showResults() {
+  const m = processingResult.metadata;
+  document.getElementById('statsContent').innerHTML = `
+    <div class="stat-row"><span class="stat-label">Excel rows</span><span class="stat-val">${m.excelRows.toLocaleString()}</span></div>
+    <div class="stat-row"><span class="stat-label">Layout wells</span><span class="stat-val">${m.layoutRows}</span></div>
+    <div class="stat-row"><span class="stat-label">Merged</span><span class="stat-val">${m.mergedRows.toLocaleString()}</span></div>
+    <div class="stat-row"><span class="stat-label">Timepoints</span><span class="stat-val">${m.timepoints.length}</span></div>
+    <div class="stat-row"><span class="stat-label">Target TP</span><span class="stat-val">${m.targetTimepoint}</span></div>
+    <div class="stat-row"><span class="stat-label">Conditions</span><span class="stat-val">${m.conditions}</span></div>`;
+  document.getElementById('statsSection').style.display = 'block';
+
+  const table = document.getElementById('top3Table');
+  table.innerHTML = '<tr><th>#</th><th>Mg</th><th>K</th><th>Mean</th><th>SD</th><th>n</th></tr>';
+  processingResult.top3.forEach(t => {
+    table.innerHTML += `<tr><td>${t.rank}</td><td>${t.MgGlu}</td><td>${t.KGlu}</td><td>${t.mean.toLocaleString()}</td><td>${t.sd}</td><td>${t.n}</td></tr>`;
+  });
+  document.getElementById('top3Section').style.display = 'block';
+  document.getElementById('bottomBar').style.display = 'flex';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Exports
+// ═══════════════════════════════════════════════════════════════════════════
+function exportAllCSV() {
+  if (!processingResult) return;
+  downloadBlob(generateAllDataCSV(processingResult.mergedData), 'so_all_data.csv');
+}
+function exportTop3CSV() {
+  if (!processingResult) return;
+  downloadBlob(generateTop3CSV(processingResult.top3), 'so_top3.csv');
+}
+
+function downloadLayoutCSV() {
+  const layout = parseLayoutFromBuilder(mgMap, kMap);
+  if (layout.length === 0) { alert('No wells with both Mg and K set'); return; }
+  const total = parseFloat(document.getElementById('totalVol').value) || 10;
+  const mm = parseFloat(document.getElementById('mmVol').value) || 2.5;
+  const lys = parseFloat(document.getElementById('lysateVol').value) || 3;
+  const mgSt = parseFloat(document.getElementById('mgStock').value) || 200;
+  const kSt = parseFloat(document.getElementById('kStock').value) || 1600;
+  const csv = ['Row (letter),Row,Column,Well,MgGlu [mM],KGlu [mM],MgGlu [uL],KGlu [uL],Water (uL)'];
+  ROWS.forEach((row, ri) => {
+    COLS.forEach(col => {
+      const well = row + col;
+      const mg = mgMap[well], k = kMap[well];
+      if (mg !== undefined && mg !== null && k !== undefined && k !== null) {
+        const mgV = (mg * total) / mgSt;
+        const kV = (k * total) / kSt;
+        const w = total - mm - lys - mgV - kV;
+        csv.push(`${row},${ri+1},${col},${well},${mg},${k},${mgV.toFixed(4)},${kV.toFixed(4)},${w.toFixed(4)}`);
+      } else {
+        csv.push(`${row},${ri+1},${col},${well},,,,, `);
+      }
+    });
+  });
+  downloadBlob(csv.join('\n'), 'plate_layout.csv');
+}
+
+function downloadBlob(text, filename) {
+  const blob = new Blob([text], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Init
+// ═══════════════════════════════════════════════════════════════════════════
+renderPlate();
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Experiment Descriptions
+// ═══════════════════════════════════════════════════════════════════════════
+var _soDescs={};
+loadAllDescriptions().then(function(d){_soDescs=d||{};});
+document.getElementById('expId').addEventListener('change',updateSoDesc);
+document.getElementById('expId').addEventListener('keyup',function(e){if(e.key==='Enter'||e.key==='Tab')updateSoDesc();});
+function updateSoDesc(){
+  var eid=document.getElementById('expId').value.trim();
+  var bar=document.getElementById('expDescBar');var txt=document.getElementById('soDescText');
+  if(!eid){bar.style.display='none';return;}
+  var d=_soDescs[eid];
+  txt.textContent=d&&d.description?d.description:'No description for '+eid;
+  bar.style.display='block';document.getElementById('expDescEditBar').style.display='none';
+}
+function editSoDesc(){
+  var eid=document.getElementById('expId').value.trim();if(!eid)return;
+  var d=_soDescs[eid];document.getElementById('soDescInput').value=d&&d.description||'';
+  document.getElementById('expDescEditBar').style.display='block';document.getElementById('soDescMsg').textContent='';
+  document.getElementById('soDescInput').focus();
+}
+function cancelSoDesc(){document.getElementById('expDescEditBar').style.display='none';}
+async function commitSoDesc(){
+  var eid=document.getElementById('expId').value.trim();if(!eid)return;
+  var desc=document.getElementById('soDescInput').value.trim();if(!desc){cancelSoDesc();return;}
+  var msg=document.getElementById('soDescMsg');msg.textContent='Saving…';msg.style.color='var(--blue)';
+  try{await saveDescription(eid,desc,'');_soDescs[eid]={description:desc};updateSoDesc();msg.textContent='Saved';msg.style.color='var(--green)';}
+  catch(e){msg.textContent='Error: '+e.message;msg.style.color='var(--red)';}
+}
+</script>
+<script src="shared/help-widget.js"></script>
+<button class="help-fab" id="helpFab" onclick="toggleHelp()" title="Help">?</button>
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()"></div>
+<div class="help-modal" id="helpModal">
+  <button class="help-close" onclick="toggleHelp()">&times;</button>
+  <div class="help-modal-head"><h2>Salt Optimization Tool &mdash; Help</h2><p>Process Mg/K screening experiments</p></div>
+  <div class="help-modal-body">
+<h3>Getting Started</h3>
+<ul>
+<li><strong>Experiment ID &amp; Lysate Lot</strong> &mdash; Enter identifiers in the top bar. These tag your data for retrieval in the heatmap and timecourse views.</li>
+<li><strong>Excel Results</strong> &mdash; Upload your Synergy H1 kinetic export (.xlsx). The tool auto-detects multiple timepoint tables and extracts all wells.</li>
+<li><strong>Layout CSV</strong> &mdash; Optional. Upload a CSV with <code>Well</code>, <code>MgGlu</code>, <code>KGlu</code> columns, or use the plate builder sidebar.</li>
+</ul>
+<h3>Plate Builder (Sidebar)</h3>
+<ul>
+<li><strong>Recipe</strong> &mdash; Set total reaction volume, master mix volume, and lysate volume.</li>
+<li><strong>Stocks</strong> &mdash; Enter Mg and K stock concentrations in mM.</li>
+<li><strong>Mg/K Ranges</strong> &mdash; Define start, end, and step for each ion. Click <strong>Fill Rows</strong> or <strong>Fill Columns</strong> to populate the plate map.</li>
+<li><strong>Export Layout CSV</strong> &mdash; Download the current plate map as a CSV file.</li>
+</ul>
+<h3>Processing</h3>
+<p>Click <strong>Process</strong> to run the pipeline: parse Excel, merge with layout, aggregate by Mg/K condition, and identify the top 3 conditions. Results are cached in your browser and available in the Heatmap and Timecourse views.</p>
+<h3>Related Views</h3>
+<ul>
+<li><strong>SO Heatmap</strong> &mdash; 2D grid of mean fluorescence by Mg/K condition.</li>
+<li><strong>SO Timecourse</strong> &mdash; 384-well kinetic curves with zoom.</li>
+</ul>
+  </div>
+</div>
+
+<script src="tutorial.js"></script>
+</body>
+</html>

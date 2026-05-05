@@ -1,0 +1,24 @@
+{
+  "P902_Results": [
+    "20260415-P902-E240-sfGFP-abs-quant_processed_2026-04-17-14-34.csv",
+    "20260415-P902-E240-sfGFP-abs-quant_processed_2026-04-17-14-39.csv",
+    "P902_Results.csv"
+  ],
+  "P902_SO_Results": [
+    "E245_so_2026-04-16-18-42.csv",
+    "E245_so_2026-04-16-18-43.csv"
+  ],
+  "lots": [
+    "cf_product.csv",
+    "controls.csv",
+    "delivered_material.csv",
+    "fermentation.csv",
+    "lysate.csv",
+    "mastermix.csv",
+    "plasmid.csv",
+    "pre_so_mm.csv",
+    "premix.csv",
+    "solubility_enhancer.csv",
+    "std_curves.csv"
+  ]
+}
