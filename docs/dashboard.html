@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/dashboard.css">
+<link rel="stylesheet" href="shared/help-widget.css">
+<meta charset="UTF-8">
+<title>CFPS Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+</head>
+<body>
+<a class="home-btn" href="index.html">
+  <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
+  Toolkit
+</a>
+<div id="app"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script src="data_loader.js"></script>
+<script src="shared/parse-csv.js"></script>
+<script type="text/babel" src="shared/dashboard-shared.jsx"></script>
+<script type="text/babel">
+
+function OverviewContent({fd, data}){
+  const{plate,meta}=data;
+  const eids=useMemo(()=>{const s={};fd.forEach(r=>{s[r.eid]=1});return Object.keys(s).sort();},[fd]);
+  const[pE,sPE]=useState(eids[0]||"");const[cG,sCG]=useState("lysate");const[cS,sCS]=useState("rxn_vol");const[cS2,sCS2]=useState("none");
+  const[bG,sBG]=useState("product");const[bS,sBS]=useState("none");const[bS2,sBS2]=useState("none");const[piG,sPiG]=useState("product");const[piM,sPiM]=useState("count");
+  const bd=useMemo(()=>{const g={};fd.forEach(r=>{const p=gL(r,bG),s2=bS!=="none"?gL(r,bS):null,s3=bS2!=="none"&&bS!=="none"?gL(r,bS2):null,l=[p,s2,s3].filter(Boolean).join(" · ");if(!l)return;if(!g[l])g[l]=[];g[l].push(r.conc);});const o={};Object.keys(g).sort((a,b)=>{const pa=a.split(" · "),pb=b.split(" · ");return pa[0].localeCompare(pb[0])||(pa[1]||"").localeCompare(pb[1]||"")||(pa[2]||"").localeCompare(pb[2]||"");}).forEach(k=>{o[k]=g[k]});return o;},[fd,bG,bS,bS2]);
+  const bcf=useMemo(()=>{if(bS==="none")return k=>gc(k.replace("µL",""));const ps2={};Object.keys(bd).forEach(k=>{ps2[k.split(" · ")[0]]=1});const pks=Object.keys(ps2).sort(),pc={};pks.forEach((p,i)=>{pc[p]=PAL[i%PAL.length]});return k=>pc[k.split(" · ")[0]]||"#6b7280";},[bd,bS]);
+  const sm=useMemo(()=>Object.keys(bd).map(k=>{const v=bd[k],c=iqrClean(v),m2=c.length?mn(c):0,s2=c.length>1?stdev(c):0;return{k,n:v.length,nc:c.length,o2:v.length-c.length,m:m2,md:c.length?Q(c,.5):0,s:s2,cv:m2?s2/m2*100:0};}).sort((a,b)=>b.m-a.m),[bd]);
+  return<div>
+    <div style={{display:"grid",gap:6,marginBottom:6,gridTemplateColumns:"1.2fr 0.8fr"}}><div style={sty.pn}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3,flexWrap:"wrap",gap:4}}><div style={sty.pt}><span style={sty.dt("#2563eb")}/>Control Chart</div><GS g={cG} sg={sCG} s={cS} ss={sCS} s2={cS2} ss2={sCS2}/></div><CChart data={fd} gBy={cG} sgBy={cS} sg2By={cS2}/></div><div style={sty.pn}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,flexWrap:"wrap",gap:4}}><div style={sty.pt}><span style={sty.dt("#7c3aed")}/>Distribution</div><GS g={bG} sg={sBG} s={bS} ss={sBS} s2={bS2} ss2={sBS2}/></div><BP data={bd} width={420} height={210} colorFn={bcf}/></div></div>
+    <div style={{display:"grid",gap:6,marginBottom:6,gridTemplateColumns:"1fr 0.72fr 0.88fr"}}><div style={sty.pn}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}><div style={sty.pt}><span style={sty.dt("#059669")}/>Plate Heatmap</div><select style={sty.sl} value={pE} onChange={e=>sPE(e.target.value)}>{eids.map(e=><option key={e} value={e}>{e}</option>)}</select></div>{meta[pE]&&<div style={{display:"flex",gap:8,marginBottom:3,fontSize:8.5,color:"#64748b"}}><span>{"Ops: "+meta[pE].o.join(", ")}</span><span>{"Vols: "+meta[pE].v.join("/")+"µL"}</span></div>}<PHeat plateData={plate} eid={pE}/></div>
+      <div style={sty.pn}><div style={sty.pt}><span style={sty.dt("#d97706")}/>Pie Chart</div><div style={{display:"flex",gap:5,marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:3}}><span style={{fontSize:8,color:"#64748b",fontWeight:600}}>Slice:</span><select style={sty.sl} value={piG} onChange={e=>sPiG(e.target.value)}>{PO.map(a=><option key={a[0]} value={a[0]}>{a[1]}</option>)}</select></div><div style={{display:"flex",alignItems:"center",gap:3}}><span style={{fontSize:8,color:"#64748b",fontWeight:600}}>Size:</span><select style={sty.sl} value={piM} onChange={e=>sPiM(e.target.value)}><option value="count">Count</option><option value="mean">Mean</option></select></div></div><Pie data={fd} gBy={piG} met={piM}/></div>
+      <div style={{...sty.pn,display:"flex",flexDirection:"column"}}><div style={sty.pt}><span style={sty.dt("#7c3aed")}/>Summary</div><div style={{overflowX:"auto",flex:1,maxHeight:200,overflowY:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:9.5}}><thead><tr><th style={sty.th}>Group</th><th style={{...sty.th,textAlign:"right"}}>n</th><th style={{...sty.th,textAlign:"right"}}>Mean</th><th style={{...sty.th,textAlign:"right"}}>Med</th><th style={{...sty.th,textAlign:"right"}}>SD</th><th style={{...sty.th,textAlign:"right"}}>CV%</th></tr></thead><tbody>{sm.map(r=><tr key={r.k}><td style={{...sty.td,display:"flex",alignItems:"center",gap:4}}><span style={sty.dt(bcf(r.k))}/><span style={{fontSize:9}}>{r.k}</span></td><td style={sty.tn}>{r.nc}{r.o2?<span style={{color:"#dc2626",fontSize:8}}>{" -"+r.o2}</span>:null}</td><td style={sty.tn}>{r.m.toFixed(0)}</td><td style={sty.tn}>{r.md.toFixed(0)}</td><td style={sty.tn}>{r.s.toFixed(0)}</td><td style={{...sty.tn,color:r.cv>30?"#dc2626":r.cv>15?"#d97706":"#059669",fontWeight:600}}>{r.cv.toFixed(1)+"%"}</td></tr>)}</tbody></table></div>
+        <div style={{marginTop:5,borderTop:"1px solid #e2e8f0",paddingTop:5}}><div style={{fontSize:8,color:"#64748b",textTransform:"uppercase",marginBottom:3,fontWeight:600}}>Relative Yield</div><div style={{maxHeight:120,overflowY:"auto"}}>{sm.map(r=>{const mx=Math.max(...sm.map(x=>x.m),1);return<div key={r.k} style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}><span style={{width:80,fontSize:7.5,color:"#64748b",textAlign:"right",flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.k}</span><div style={{flex:1,height:7,background:"#f1f5f9",borderRadius:3,overflow:"hidden"}}><div style={{width:(r.m/mx*100)+"%",height:"100%",borderRadius:3,background:"linear-gradient(90deg,"+bcf(r.k)+"66,"+bcf(r.k)+")"}}/></div><span style={{fontSize:8,color:"#1e293b",width:36,textAlign:"right",fontWeight:500}}>{r.m.toFixed(0)}</span></div>;})}</div></div></div></div>
+    <div style={sty.pn}><div style={sty.pt}><span style={sty.dt("#0891b2")}/>Per-Experiment</div><BP data={useMemo(()=>{const g={};fd.forEach(r=>{if(!g[r.eid])g[r.eid]=[];g[r.eid].push(r.conc);});const o={};Object.keys(g).sort().forEach(k=>{o[k]=g[k]});return o;},[fd])} width={780} height={190} colorFn={()=>"#0891b2"}/></div>
+  </div>;
+}
+
+ReactDOM.render(<AppWrap activePage="index" renderContent={({fd,data})=><OverviewContent fd={fd} data={data}/>}/>,document.getElementById("app"));
+</script>
+<script src="shared/help-widget.js"></script>
+<button class="help-fab" id="helpFab" onclick="toggleHelp()" title="Help">?</button>
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()"></div>
+<div class="help-modal" id="helpModal">
+  <button class="help-close" onclick="toggleHelp()">&times;</button>
+  <div class="help-modal-head"><h2>Overview Dashboard — Help</h2><p>Multi-experiment overview with interactive charts and filters</p></div>
+  <div class="help-modal-body"><h3>Filters Panel</h3>
+<p>Click <strong>▾ Filters</strong> to expand/collapse. Toggle individual filter chips to include or exclude specific values. Click <strong>ALL</strong> to select or deselect all options for a filter category. Available filters: Exp ID, Template, Rxn Vol, Lysate, Master Mix, Product, Operator, Test Condition.</p>
+
+<h3>KPI Cards</h3>
+<p>Six summary metrics across the top: Filtered sample count, Mean concentration (mg/L), Median, CV%, Experiment count, and Outlier count.</p>
+
+<h3>Charts</h3>
+<ul>
+<li><strong>Control Chart</strong> — Mean ± SD per experiment. Use the <strong>Group</strong> and <strong>+Sub</strong> dropdowns to change grouping (e.g., by Product, Lysate, Operator). Connected lines show trends.</li>
+<li><strong>Distribution (Boxplot)</strong> — Box-and-whisker plots with jittered data points. Red open circles indicate IQR outliers. Configurable grouping.</li>
+<li><strong>Plate Heatmap</strong> — Select an experiment from the dropdown. Wells are colored by fluorescence intensity (Viridis scale). Standards are highlighted with a purple border.</li>
+<li><strong>Pie Chart</strong> — Slice by any metadata field. Toggle between <strong>Count</strong> and <strong>Mean</strong> sizing.</li>
+<li><strong>Summary Table</strong> — Mean, Median, SD, CV% per group. CV% is color-coded: green (&lt;15%), amber (15–30%), red (&gt;30%).</li>
+<li><strong>Relative Yield</strong> — Horizontal bars comparing group means.</li>
+<li><strong>Per-Experiment</strong> — Box plots for every experiment side-by-side.</li>
+</ul>
+
+<h3>Zoom &amp; Pan</h3>
+<p>All SVG charts support: <span class="help-key">Scroll</span> to zoom, <strong>drag</strong> to pan, <strong>double-click</strong> to reset.</p>
+
+<h3>Navigation</h3>
+<p>Use the tab bar at the top: Load Data → Overview → Curves &amp; Lots → Experiment → Raw Data → Reproducibility.</p></div>
+</div>
+
+<script src="tutorial.js"></script>
+</body></html>

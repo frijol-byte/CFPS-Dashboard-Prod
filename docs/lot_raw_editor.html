@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lot Raw Table Browser &amp; Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/help-widget.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FAFAF8;--surface:#FFFFFF;--surface2:#F3F2EE;--surface3:#EBE9E4;
+  --text:#1A1A18;--text2:#5C5B56;--text3:#8E8D88;
+  --accent:#92400E;--accent-light:#FEF3C7;--accent-dark:#78350F;
+  --blue:#1E40AF;--blue-light:#E8EEFB;
+  --purple:#6D28D9;--purple-light:#F3EEFB;
+  --green:#1B6B4A;--green-light:#E8F5EE;
+  --danger:#B5342E;--danger-light:#FCEEED;
+  --border:#DDD9D1;--border2:#C8C4BB;
+  --radius:10px;--radius-lg:14px;
+  --edit-bg:#FFFBEB;--edit-border:#F59E0B;
+}
+html{font-family:'DM Sans',system-ui,sans-serif;font-size:15px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+body{min-height:100vh}
+.mono{font-family:'JetBrains Mono',monospace}
+
+/* ── HOME BUTTON (matches other pages) ── */
+.home-btn{
+  position:fixed;top:16px;right:160px;z-index:50;
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border-radius:10px;
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text2);font-size:.78rem;font-weight:500;
+  text-decoration:none;font-family:inherit;
+  transition:all .25s;box-shadow:0 2px 8px rgba(0,0,0,.04);
+}
+.home-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-light);box-shadow:0 4px 12px rgba(146,64,14,.08)}
+.home-btn svg{width:14px;height:14px;flex-shrink:0}
+
+/* ── APP SHELL ── */
+.app{max-width:1400px;margin:0 auto;padding:1.5rem 1.5rem 4rem}
+
+/* ── TOPBAR ── */
+.topbar{display:flex;align-items:center;gap:12px;margin-bottom:1.5rem;flex-wrap:wrap}
+.topbar h1{font-size:1.35rem;font-weight:700;letter-spacing:-.03em;flex:1}
+.topbar h1 span{color:var(--accent)}
+
+/* ── BADGE ── */
+.status-badge{display:inline-flex;align-items:center;gap:5px;font-size:.68rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;padding:4px 12px;border-radius:20px;font-family:'JetBrains Mono',monospace}
+.status-badge.unsaved{background:var(--danger-light);color:var(--danger)}
+.status-badge.saved{background:var(--green-light);color:var(--green)}
+.status-badge .dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── TABS ── */
+.tabs-wrap{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 0 0;margin-bottom:1rem}
+.tabs{display:flex;flex-wrap:wrap;gap:5px 4px;padding-bottom:8px;border-bottom:1.5px solid var(--border)}
+.tab-btn{padding:6px 14px;font-size:.75rem;font-weight:500;cursor:pointer;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text2);white-space:nowrap;transition:all .2s;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.tab-btn:hover{border-color:var(--border2);color:var(--text);background:var(--surface2)}
+.tab-btn.active{color:#fff;border-color:var(--accent);background:var(--accent);box-shadow:0 2px 8px rgba(146,64,14,.18)}
+.tab-btn .tab-count{font-size:.62rem;font-family:'JetBrains Mono',monospace;background:rgba(0,0,0,.06);padding:1px 6px;border-radius:6px}
+.tab-btn.active .tab-count{background:rgba(255,255,255,.25);color:#fff}
+.tab-btn.modified::after{content:'';width:5px;height:5px;border-radius:50%;background:var(--danger);flex-shrink:0}
+
+/* ── TOOLBAR ── */
+.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:.75rem;flex-wrap:wrap}
+.search-box{flex:1;min-width:180px;position:relative}
+.search-box input{width:100%;padding:8px 12px 8px 34px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:.82rem;font-family:inherit;background:var(--surface);color:var(--text);transition:border-color .2s}
+.search-box input:focus{outline:none;border-color:var(--accent)}
+.search-box svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--text3)}
+
+.toolbar-btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text2);font-size:.75rem;font-weight:500;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap}
+.toolbar-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-light)}
+.toolbar-btn svg{width:13px;height:13px}
+.toolbar-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.toolbar-btn.primary:hover{background:var(--accent-dark)}
+.toolbar-btn.danger{border-color:var(--danger);color:var(--danger)}
+.toolbar-btn.danger:hover{background:var(--danger-light)}
+
+/* ── TABLE ── */
+.table-container{overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);max-height:calc(100vh - 260px);position:relative}
+.raw-table{width:100%;border-collapse:collapse;font-size:.78rem}
+.raw-table thead{position:sticky;top:0;z-index:5}
+.raw-table th{text-align:left;padding:8px 10px;font-weight:600;color:var(--text3);border-bottom:1.5px solid var(--border);font-size:.65rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;background:var(--surface2);cursor:pointer;user-select:none}
+.raw-table th:hover{color:var(--text)}
+.raw-table th .sort-icon{display:inline-block;margin-left:3px;opacity:.3;font-size:.55rem}
+.raw-table th.sorted .sort-icon{opacity:1;color:var(--accent)}
+.raw-table th.row-num{width:36px;text-align:center;cursor:default;padding:8px 4px}
+
+.raw-table td{padding:0;border-bottom:1px solid var(--surface2);font-family:'JetBrains Mono',monospace;font-size:.72rem;position:relative}
+.raw-table td.row-num-cell{width:36px;text-align:center;padding:6px 4px;color:var(--text3);font-size:.62rem;background:var(--surface2);border-right:1px solid var(--border);user-select:none;cursor:pointer}
+.raw-table td.row-num-cell:hover{background:var(--danger-light);color:var(--danger)}
+.raw-table td.row-num-cell.selected{background:var(--accent-light);color:var(--accent)}
+.raw-table tr:hover td:not(.row-num-cell){background:#FEFCE8}
+.raw-table tr.selected-row td{background:var(--accent-light) !important}
+.raw-table tr.new-row td{background:#F0FDF4 !important}
+
+/* cell input */
+.cell-input{width:100%;border:none;background:transparent;font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--text);padding:6px 8px;outline:none;min-width:60px}
+.cell-input:focus{background:var(--edit-bg);box-shadow:inset 0 0 0 1.5px var(--edit-border)}
+.cell-input.modified{background:#FEF3C7}
+
+/* ── ADD ROW AREA ── */
+.add-row-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border-top:1px solid var(--border);border-radius:0 0 var(--radius-lg) var(--radius-lg);font-size:.75rem;color:var(--text2)}
+
+/* ── FOOTER INFO ── */
+.footer-info{display:flex;align-items:center;justify-content:space-between;margin-top:.75rem;font-size:.7rem;color:var(--text3);flex-wrap:wrap;gap:8px}
+.footer-info .cell-count{font-family:'JetBrains Mono',monospace}
+
+/* ── GITLAB PANEL ── */
+.gl-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.25rem;margin-bottom:1rem}
+.gl-panel summary{font-size:.82rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;color:var(--text2);list-style:none}
+.gl-panel summary::-webkit-details-marker{display:none}
+.gl-panel summary::before{content:'▶';font-size:.55rem;transition:transform .2s;display:inline-block}
+.gl-panel[open] summary::before{transform:rotate(90deg)}
+.gl-panel .gl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:.75rem}
+@media(max-width:600px){.gl-panel .gl-grid{grid-template-columns:1fr}}
+.gl-panel label{font-size:.68rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px}
+.gl-panel input{width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:.78rem;font-family:'JetBrains Mono',monospace;background:var(--surface);color:var(--text)}
+.gl-panel input:focus{outline:none;border-color:var(--accent)}
+.gl-tag{display:inline-flex;align-items:center;gap:4px;font-size:.62rem;padding:2px 8px;border-radius:10px;font-weight:600;background:var(--green-light);color:var(--green);font-family:'JetBrains Mono',monospace}
+.gl-tag.disconnected{background:var(--surface2);color:var(--text3)}
+.gl-actions{display:flex;gap:8px;margin-top:.75rem;align-items:center}
+.gl-status{display:none;font-size:.72rem;margin-top:8px;padding:8px 12px;border-radius:var(--radius);font-family:'JetBrains Mono',monospace}
+.gl-status.show{display:block}
+.gl-status.info{background:var(--blue-light);color:var(--blue)}
+.gl-status.ok{background:var(--green-light);color:var(--green)}
+.gl-status.err{background:var(--danger-light);color:var(--danger)}
+
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.1);border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(120%);background:var(--text);color:#fff;padding:10px 20px;border-radius:10px;font-size:.8rem;font-weight:500;z-index:200;transition:transform .3s cubic-bezier(.22,1,.36,1);pointer-events:none;white-space:nowrap}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);width:92%;max-width:520px;max-height:90vh;overflow:auto;padding:1.75rem;box-shadow:0 24px 48px rgba(0,0,0,.12)}
+.modal h3{font-size:1rem;font-weight:700;margin-bottom:.5rem}
+.modal p{font-size:.82rem;color:var(--text2);margin-bottom:1rem;line-height:1.5}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem}
+.modal-actions button{padding:8px 18px;border-radius:var(--radius);font-family:inherit;font-size:.8rem;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--surface);color:var(--text2);transition:all .2s}
+.modal-actions button:hover{border-color:var(--border2);color:var(--text)}
+.modal-actions .btn-danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+.modal-actions .btn-danger:hover{background:#991B1B}
+.modal-actions .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.modal-actions .btn-primary:hover{background:var(--accent-dark)}
+
+/* col editor modal */
+.col-editor-field{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--surface2)}
+.col-editor-field input{flex:1;padding:6px 8px;font-size:.78rem;font-family:'JetBrains Mono',monospace;border:1.5px solid var(--border);border-radius:6px;background:var(--surface)}
+.col-editor-field input:focus{outline:none;border-color:var(--accent)}
+.col-editor-field .col-idx{font-size:.62rem;font-family:'JetBrains Mono',monospace;color:var(--text3);width:20px;text-align:right}
+
+/* ── RESPONSIVE ── */
+@media(max-width:700px){
+  .app{padding:1rem}
+  .topbar h1{font-size:1.1rem}
+  .toolbar{gap:6px}
+  .tab-btn{padding:5px 10px;font-size:.7rem}
+}
+
+
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- HOME BUTTON (fixed, same as other pages) -->
+<a class="home-btn" href="index.html">
+  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
+  Toolkit home
+</a>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <h1>Lot <span>Raw Table</span> Browser &amp; Editor</h1>
+  <span class="status-badge saved" id="statusBadge"><span class="dot"></span> <span id="statusText">no changes</span></span>
+</div>
+
+<!-- GITLAB SETTINGS -->
+<details class="gl-panel" id="glPanel">
+  <summary>
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    GitLab sync
+    <span class="gl-tag disconnected" id="glTag">not configured</span>
+  </summary>
+  <div class="gl-grid">
+    <div><label>Repository</label><input id="glProject" placeholder="e.g. owner/repo-name"></div>
+    <div><label>Branch</label><input id="glBranch" value="main" placeholder="main"></div>
+    <div><label>Personal access token</label><input id="glToken" type="password" placeholder="ghp_…"></div>
+    <div style="display:flex;align-items:flex-end">
+      <div class="gl-actions">
+        <button class="toolbar-btn" onclick="clearGLSettings()">Clear</button>
+        <button class="toolbar-btn" id="toggleTok" onclick="toggleTokenVis()">Show</button>
+      </div>
+    </div>
+  </div>
+  <div class="gl-status" id="glStatus"></div>
+</details>
+
+<!-- TABS -->
+<div class="tabs-wrap">
+  <div class="tabs" id="tabBar"></div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar" id="toolbar">
+  <div class="search-box">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" id="searchInput" placeholder="Search rows…" oninput="onSearch(this.value)">
+  </div>
+  <button class="toolbar-btn" onclick="addRow()">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Add row
+  </button>
+  <button class="toolbar-btn danger" onclick="confirmDeleteSelected()">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg> Delete selected
+  </button>
+  <button class="toolbar-btn" onclick="exportCSV()">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export CSV
+  </button>
+  <button class="toolbar-btn" onclick="editColumns()">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Columns
+  </button>
+  <button class="toolbar-btn" onclick="pullFromGitLab()">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="8 8 12 12 16 8"/><line x1="12" y1="12" x2="12" y2="3"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg> Pull from GitLab
+  </button>
+  <button class="toolbar-btn primary" onclick="pushAllChanges()">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg> Push to GitLab
+  </button>
+</div>
+
+<!-- TABLE -->
+<div class="table-container" id="tableContainer"></div>
+
+<!-- FOOTER INFO -->
+<div class="footer-info">
+  <span id="rowInfo">0 rows</span>
+  <span class="cell-count" id="changeInfo"></span>
+</div>
+
+</div>
+
+<!-- CONFIRMATION MODAL -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal">
+    <h3 id="confirmTitle">Confirm</h3>
+    <p id="confirmText">Are you sure?</p>
+    <div class="modal-actions">
+      <button onclick="closeConfirm()">Cancel</button>
+      <button class="btn-danger" id="confirmAction" onclick="closeConfirm()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- COLUMN EDITOR MODAL -->
+<div class="modal-overlay" id="colModal">
+  <div class="modal">
+    <h3>Edit column headers</h3>
+    <p>Rename CSV column headers for the current table. Changes apply to export and GitLab push.</p>
+    <div id="colEditorFields"></div>
+    <div class="modal-actions">
+      <button onclick="closeColEditor()">Cancel</button>
+      <button class="btn-primary" onclick="saveColumns()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  CSV FILES CONFIG — matches lot_browser data/lots/
+// ═══════════════════════════════════════════════════════════
+const CSV_FILES = [
+  { key: 'fermentation',       file: 'fermentation.csv',       label: 'Fermentation' },
+  { key: 'lysate',             file: 'lysate.csv',             label: 'Lysate' },
+  { key: 'mastermix',          file: 'mastermix.csv',          label: 'Mastermix' },
+  { key: 'solubility_enhancer',file: 'solubility_enhancer.csv',label: 'Solubility Enhancer' },
+  { key: 'premix',             file: 'premix.csv',             label: 'Premix' },
+  { key: 'plasmid',            file: 'plasmid.csv',            label: 'Plasmid' },
+  { key: 'std_curves',         file: 'std_curves.csv',         label: 'Std Curves' },
+  { key: 'controls',           file: 'controls.csv',           label: 'Controls' },
+  { key: 'cf_product',         file: 'cf_product.csv',         label: 'CF Product' },
+  { key: 'pre_so_mm',          file: 'pre_so_mm.csv',          label: 'Pre-SO MM' },
+  { key: 'delivered_material',  file: 'delivered_material.csv',  label: 'Delivered Material' },
+];
+
+// ═══════════════════════════════════════════════════════════
+//  EMBEDDED CSV DATA (from data/lots/ — same source as Lot Browser)
+// ═══════════════════════════════════════════════════════════
+const EMBEDDED_CSV = {
+  fermentation: `num,date,fermenter_num,fte,strain,sop,br_batching_sheet,eln,fermenter_lot_num,notes,use_for_experiment_production,lysate_lot,harvested_pellet_g
+A1,20250410,F#,Person 1,Bl21DE3,Fermentation protocol for TX-TL v2,,,20250410-A1-F#,ran to specifications,,20250411,
+A2,20250410,F#,Person 1,Bl21DE3,Fermentation protocol for TX-TL v2,,,20250410-A2-F#,ran to specifications,,20250609,
+1,20250716,F09,Person 1,Bl21DE3,Fermentation protocol for TX-TL v2,,Slides 15-19,20250716-1-F09,ran to specifications,,,
+2,20250716,F10,Person 1,BL21StarDE3,Fermentation protocol for TX-TL v2,,Slides 15-19,20250716-2-F10,ran to specifications,"Production, went to free samples, Open AI",20250721,
+3,20250716,F11,Person 1,BL21StarDE3,Fermentation protocol for TX-TL v2,,Slides 15-19,20250716-3-F11,ran to specifications,Open AI,20250811,
+4,20250820,F09,Person 1  Person 2 Person 3,BL21StarDE3,Fermentation protocol for CFPS.docx,Batching sheet P902 2025August18 JC,https://eln.internal.example.com/elements/entity/experiment:7f7fe532-43b3-49b8-9717-819c85432b72?focus=text:497dc7c5-355c-4379-85c2-dd5ced5257ee,20250820-4-F09,ran to specifications,Experiment,E15,
+5,20250820,F10,Person 1  Person 2 Person 3,BL21StarDE3,Fermentation protocol for CFPS.docx,Batching sheet P902 2025August18 JC,https://eln.internal.example.com/elements/entity/experiment:7f7fe532-43b3-49b8-9717-819c85432b72?focus=text:497dc7c5-355c-4379-85c2-dd5ced5257ee,20250820-5-F10,ran to specifications,Experiment,E,
+6,20250820,F11,Person 1  Person 2 Person 3,BL21StarDE3,Fermentation protocol for CFPS.docx,Batching sheet P902 2025August18 JC,https://eln.internal.example.com/elements/entity/experiment:7f7fe532-43b3-49b8-9717-819c85432b72?focus=text:497dc7c5-355c-4379-85c2-dd5ced5257ee,20250820-6-F11,ran to specifications,Experiment,E,
+7,20250917,F09,Person 1  Person 2 Person 3,BL21StarDE3,In ELN,In ELN,https://eln.internal.example.com/elements/entity/experiment:c6ca4bf7-9f54-4c06-9ee3-93b04f327551?focus=text%3Ac6aec458-659f-42a1-a080-419cd724a4b8,20250917-7-F09,Meant to deviate (overfeed),Experiment,,362.66
+8,20250917,F10,Person 1  Person 2 Person 3,BL21StarDE3,in ELN,in ELN,https://eln.internal.example.com/elements/entity/experiment:c6ca4bf7-9f54-4c06-9ee3-93b04f327551?focus=text%3Ac6aec458-659f-42a1-a080-419cd724a4b8,20250917-8-F10,Meant to deviate (overfeed),Experiment,,377.81
+9,20250917,F11,Person 1  Person 2 Person 3,BL21StarDE3,in ELN,in ELN,https://eln.internal.example.com/elements/entity/experiment:c6ca4bf7-9f54-4c06-9ee3-93b04f327551?focus=text%3Ac6aec458-659f-42a1-a080-419cd724a4b8,20250917-9-F11,Run to specification,OpenAI,,326.75
+10,20250930,F09,Person 1  Person 2 Person 3,BL21StarDE3,in ELN,in ELN,https://eln.internal.example.com/elements/entity/experiment:f72eab79-dd84-4020-8398-ce4f1885b70e?focus=text%3A11fae71b-aedd-43eb-8196-ef8c3e4d9ba8,20250930-10-F09,Run to specification,,,
+11,20250930,F10,Person 1  Person 2 Person 3,BL21StarDE3,in ELN,in ELN,https://eln.internal.example.com/elements/entity/experiment:f72eab79-dd84-4020-8398-ce4f1885b70e?focus=text%3A11fae71b-aedd-43eb-8196-ef8c3e4d9ba8,20250930-11-F10,Run to specification,,,
+12,20250930,F11,Person 1  Person 2 Person 3,BL21StarDE3,in ELN,in ELN,https://eln.internal.example.com/elements/entity/experiment:f72eab79-dd84-4020-8398-ce4f1885b70e?focus=text%3A11fae71b-aedd-43eb-8196-ef8c3e4d9ba8,20250930-12-F11,Meant to deviate (overfeed),,,
+13,20251014,Deinotherium,Person 1,BL21StarDE3,,,,20251014-Deinotherium-13,R1-R11,Experiment,,
+14,20251023,F09,Person 1  Person 2 Person 3,BL21StarDE3,in ELN,in ELN,ELN,20251023-F09-14,"Run to specification, combined with 15",Production,20251024-12-L,
+15,20251023,F11,Person 1  Person 2 Person 3,BL21StarDE3,in ELN,in ELN,ELN,20251023-F11-15,"Run to specification, combined with 14",Production,20251024-12-L,
+16,20251105,F09,Person 3 Person 7 Person 2,BL21StarDE3,in ELN,in ELN,ELN,20251105-F09-16,"run to spec, material combined 20251105-F09-16, F10-17, F11-18",Production,20251106-L-13,did not measure
+17,20251105,F10,Person 3 Person 7 Person 2,BL21StarDE3,in ELN,in ELN,ELN,20251105-F10-17,"run to spec, material combined 20251105-F09-16, F10-17, F11-19",Production,20251106-L-13,did not measure
+18,20251105,F11,Person 3 Person 7 Person 2,BL21StarDE3,in ELN,in ELN,ELN,20251105-F11-18,"run to spec, material combined 20251105-F09-16, F10-17, F11-20",Production,20251106-L-13,did not measure
+19,20251120,F09,Person 3 Person 7 Person 1,BL21StarDE3,in ELN,https://chat.internal.example.com/archives/C099CTV4SAD/p1763049531754749?thread_ts=1762877581.879919&cid=C099CTV4SAD,ELN,20251120-F09-19,run to spec,Production,20251125-L-14,
+20,20251120,F10,Person 3 Person 7 Person 1,BL21StarDE3,in ELN,https://chat.internal.example.com/archives/C099CTV4SAD/p1763049531754749?thread_ts=1762877581.879919&cid=C099CTV4SAD,ELN,20251120-F10-20,run to spec,Production,20251125-L-14,
+21,20251120,F11,Person 3 Person 7 Person 1,BL21StarDE3,in ELN,https://chat.internal.example.com/archives/C099CTV4SAD/p1763049531754749?thread_ts=1762877581.879919&cid=C099CTV4SAD,ELN,20251120-F11-21,Fermentation Died,Production,20251125-L-14,
+22,20251204,F09,Person 3 Person 7 Person 1,BL21StarDE3,in ELN,P902 5L Scale Production Batch Record,ELN,20251204-F09-22,run to spec,Production,20251209-15-L,
+23,20251204,F10,Person 3 Person 7 Person 1,BL21StarDE3,in ELN,P902 5L Scale Production Batch Record,ELN,20251204-F10-23,run to spec,Production,20251209-15-L,
+24,20251204,F11,Person 3 Person 7 Person 1,BL21StarDE3,in ELN,P902 5L Scale Production Batch Record,ELN,20251204-F11-24,run to spec,Production,20251209-15-L,
+25,20260114,F09,Person 3 Person 7 Person 1,BL21StarDE3,in ELN,in ELN,ELN,20260114-F09-25,run to spec,Production,20251209-17-L,258.66
+26,20260114,F10,Person 3 Person 7 Person 1,BL21StarDE3,in ELN,in ELN,ELN,20260114-F10-26,run to spec,Production,20251209-17-L,268.82
+27,20260114,F11,Person 3 Person 7 Person 1,BL21StarDE3,in ELN,in ELN,ELN,20260114-F11-27,run to spec,Production,20251209-17-L,272.19
+28,20260211,F09,Person 3 Person 7 Person 1,BL21StarDE3,,,,20260211-F09-28,"Delayed fermentation, DO probe failure",Failed,"20251209-18,19-L",
+29,20260211,F10,Person 3 Person 7 Person 1,BL21StarDE3,,,,20260211-F10-29,run to spec,Failed,"20251209-18,19-L",
+30,20260211,F11,Person 3 Person 7 Person 1,BL21StarDE3,,,,20260211-F11-30,run to spec,Failed,"20251209-18,19-L",
+31,20260312,F11,Person 1 Person 7,BL21StarDE3,,,,20260312-F11-31,run to spec,Production,20260316-21-L,270
+32,20260324,F09,Person 3 Person 7 Person 1,BL21StarDE3,,,,20260324-F09-32,run to spec,Production,"20260326-22-L, 20260326-23L",
+33,20260324,F10,Person 3 Person 7 Person 1,BL21StarDE3,,,,20260324-F10-33,Chiller break down,,,
+34,20260324,F11,Person 3 Person 7 Person 1,BL21StarDE3,,,,20260324-F11-34,contaminated,,,`,
+
+  lysate: `num,fte,date,lysis_sop,batch_record,lysis_lot_number,fermentation_lot,starting_lysate_volume_ml,resuspension_ratio_ml_-_buffer:g_-_pellet,lims_id,kglu_mm,mgglu_mm,cfu_count,abs_quant_plasmid_g_l,abs_quant_plasmid_cv_pct,approximate_data_source_link,abs_quant_linear_g_l,abs_quant_linear_-_cv_pct,approximate_data_source_link.1,solubility_pct,solubility_error_cvpct,approximate_data_source_link.2,salt_optimization_experiment_file,use
+1,Person 1,20250411,,,20250411-1-L,20250410_006,,,,,,,,,,,,,,,,,
+2,Person 1,20250609,,,20250609-2-L,20250410_007,,,,,,,,,,,,,,,,,
+3,Person 1,20250721,,,20250721-3-L,20250820-F10-5,,0.7 mL/g,,160,9,Lawn,,,,,,,,,,20250729 Echo setup P902 Salt Optimization,
+4,Person 1,20250811,,,20250811-4-L,20250820-F11-6,,0.7 mL/g,,240,12,Lawn,,,,,,,,,,20250814 P902 Salt Optimization Echo setup,
+5,Person 4,20250918,Lysing protocol for CFPS.docx,ELN,20250918-5-L,20250917-7-F09,758.94,1.4 mL/g,e12132,160,8,70000,,,,,,,,,,20250919 P902 E49 Salt Optimization Echo setup,
+6,Person 4,20250918,Lysing protocol for CFPS.docx,ELN,20250918-6-L,20250917-8-F10,715.87,1.4 mL/g,e12131,200,8,17000000,,,,,,,,,,20250919 P902 E49 Salt Optimization Echo setup,
+7,Person 4,20250918,Lysing protocol for CFPS.docx,ELN,20250918-7-L,20250917-9-F11,714.36,1.4 mL/g,e12129,240,8,400000,,,,,,,,,,20250919 P902 E49 Salt Optimization Echo setup,
+8,Person 4,20251008,Lysing protocol for CFPS.docx,ELN,20251008-8-L,20250930-10-F09,226.55,0.7 mL/g,e12133,,,,,,,,,,,,,,
+9,Person 4,20251008,Lysing protocol for CFPS.docx,ELN,20251008-9-L,20250930-10-F09,163.97,1.4 mL/g,e12134,,,,,,,,,,,,,,
+10,Person 4,20251008,Lysing protocol for CFPS.docx,ELN,20251008-10-L,20250930-11-F10,255.02,0.7 mL/g,e12135,,,,,,,,,,,,,,
+11,Person 4,20251008,Lysing protocol for CFPS.docx,ELN,20251008-11-L,20250930-11-F10,163.77,1.4 mL/g,e12136,,,500000,,,,,,,,,,,
+12,Person 4,20251024,Lysing protocol for CFPS.docx,ELN,20251024-12-L,"20251023-F09-14
+20251023-F11-15",700.68,1.4 mL/g,e12149,120,6,100,"0.58-0.75 (1-MMA)
+1.13 ( 5-MMA)",,"P902_E92-QC-20251029-Abs quant for validation of E91 Master Mix and E76 lysate using plasmid and linear templates - Results
+P902_E096-QC-20251103-Abs quant for validation of MM Lot 4, 5, 6 with E76 lysate using plasmid and linear templates","0.42 - 0.47 (1-MMA)
+0.47 (5-MMA)",,"P902_E92-QC-20251029-Abs quant for validation of E91 Master Mix and E76 lysate using plasmid and linear templates - Results
+P902_E096-QC-20251103-Abs quant for validation of MM Lot 4, 5, 6 with E76 lysate using plasmid and linear templates",55,,Solubility: E98 VCE Solubility Data for 0.2% Brij MM -- 20251103-6-MM-B,P902 E87 Salt Optimization of E76 lysate 20251028,External / Internal
+13,Person 4,20251106,Lysing protocol for CFPS.docx,ELN,20251106-13-L,"20251105-F09-16
+20251105-F10-17
+20251105-F11-18",863.88,1.4 mL/g,e12163,240,4,50,,,,,,,,,,E112-SO-20251112-Redo Salt Optima and Abs Quant on E100 Lysate,Internal
+14,Person 5,20251125,Lysing protocol for CFPS.docx,https://eln.internal.example.com/elements/entity/experiment:cb31d0a7-34d3-46ea-93e6-a5e83f505f51?focus=experiment%3A5d8e8c4f-96bf-4367-aaf7-263bb3915452,20251125-14-L,"20251120-F09-19
+20251120-F10-20",450 mL,1.4 mL/g,e12223,120,4,30000,2.6,,,,,,,,,,Internal
+14-D,Person 5,20251125,Lysing protocol for CFPS.docx,https://eln.internal.example.com/elements/entity/experiment:cb31d0a7-34d3-46ea-93e6-a5e83f505f51?focus=experiment%3A5d8e8c4f-96bf-4367-aaf7-263bb3915452,20251125-14-D-L,"20251120-F09-19
+20251120-F10-20",300 mL,1.4 mL/g,e12224,120,4,30000,1.3,,,,,,,,,,
+15,Person 5 / Person 6,20251209,P902 Pellet Lysis Batch Record,https://eln.internal.example.com/elements/entity/experiment:43a03c18-988a-4127-be26-e7963cc4f8f2?focus=text%3A3b8cebed-60b8-4929-aaa9-b5562658abf4&view=status,20251209-15-L,"20251204-F09-22
+20251204-F10-23
+20251204-F11-24",168 mL,1.4 ml/g,e12249,180,4,400,,,,,,,,,,,Internal / External
+16,Person 5/Person 2,20251219,P902 Pellet Lysis Batch Record,20251219-16-L.pdf,20251219-16-L,"20251204-F09-22
+20251204-F10-23
+20251204-F11-24",733,1.4 ml/g,e12259,180,4,150,,,,,,,,,,,Internal
+17,Person 5,20260121,P902 Pellet Lysis Batch Record,https://eln.internal.example.com/elements/entity/experiment:04a21013-d0d3-4691-89dc-0f3bcc701a0c?focus=experiment%3A5d8e8c4f-96bf-4367-aaf7-263bb3915452,20260121-17-L,"20260114-F09-25
+20260114-F10-26
+20260114-F11-27",825,1.4 ml/g,e12295,180,4,1700,,,,2.03,,,,,,,Internal / External
+18,Person 6/Person 5,20260303,P902 Pellet Lysis Batch Record,,20260303-18-L,"20260211-F10-29
+20260211-F11-30",,1.4 ml/g,e12361,,,4000,0,,,0,,,,,,,none
+19,Person 5,20260304,P902 Pellet Lysis Batch Record,,20260304-19-L,"20260211-F10-29
+20260211-F11-30",,1.4 ml/g,,,,2000,0,,,0,,,,,,,none
+20,Person 5,20260306,P902 Pellet Lysis Batch Record,,20260306-L-20,"20251204-F09-22
+20251204-F10-23
+20251204-F11-24",,1.4 ml/g,e12374,260,4,1000,1.96,0.22,,1.99,0.0901,,,,,,
+21,Person 5,20260316,P902 Pellet Lysis Batch Record,,20260316-L-21,20260306-F11-31,,1.4 mL/g,e12377,260-340,5,3700,,,,,,,,,,,
+22,Person 5,20260326,P902 Pellet Lysis Batch Record,,20260326-L-22,20260324-F09-32,,1.4 mL/g,e12408,280-340,5,4000,2.45,0.134,,2.4,0.161,,,,,,
+23,Person 5,20260326,P902 Pellet Lysis Batch Record,,20260326-L-23,20260324-F09-32,,1.4 mL/g,e12409,240-280,5,4000,2.8,0.139,,2.21,0.219,,,,,,`,
+
+  mastermix: `num,date_yymmdd,fte,batching_sheet_link,prepared_for,volume_created_ml,paired_lysate_lot,sop_used,lot_number,lot_num__+_description,kglu_mm,mgglu2_mm,type,assumed_expiry,comments
+1,2025-10-29,Person 4,P902_E91_Master Mix Batching Record,,56.1,20251024-12-L,Batching Sheet,20251029-1-MM-A,20251029-1-MM-A,120,6,,2026-10-29,
+2,2025-10-29,Person 4,P902_E91_Master Mix Batching Record,,52.8,20251024-12-L,Batching Sheet,20251029-2-MM-B,20251029-2-MM-B,120,6,Brij,2026-10-29,0.1% Brij added accidentally so used for internal MSAT testing and handed over to Datapoints for their tests
+3,2025-10-31,-,-,,-,-,Batching Sheet,20251031-3-MM-A,20251031-3-MM-A,-,-,,2026-10-31,
+4,2025-10-31,Person 5,P902_E94_Master Mix Batching Record,,59.4,20151024-12-L,Batching Sheet,20251031-4-MM-B,20251031-4-MM-B,120,6,Brij,2026-10-31,
+5,2025-11-03,,P902_E97_Master Mix Batching Record,,,,Batching Sheet,20251103-5-MM-A,20251103-5-MM-A,120,6,,2026-11-03,
+6,2025-11-03,,P902_E97_Master Mix Batching Record,,,,Batching Sheet,20251103-6-MM-B,20251103-6-MM-B,120,6,Brij,2026-11-03,
+7,2025-12-04,Person 6,P902_E126_Master Mix Batching Record,,50,20151024-12-L,Batching Sheet,20251204-7-MM-A,20251204-7-MM-A For 12L,120,6,,2026-12-04,
+8,2025-12-04,Person 6,P902_E127_Master Mix Batching Record,,20,251106-13-L,Batching Sheet,20251204-8-MM-A,20251204-8-MM-A For 13L,240,4,,2026-12-04,
+9,2025-12-10,Person 5 Person 2,P902_E128_Master Mix Batching Record,,66,20251205-14-L,Batching Sheet,20251210-9-MM-A,20251210-9-MM-A For 14L,120,4,none,2026-12-10,
+10,2025-12-10,Person 5 Person 6,P902_E128_Master Mix Batching Record,,66,20251205-14-L,Batching Sheet,20251210-10-MM-B,20251210-10-MM-B For 14L,120,4,Brij,2026-12-10,
+11,2025-12-15,Person 5 Person 6,P902_E132_Master Mix Batching Record,,120,20251209-15-L,Batching Sheet,20251215-11-MM-A,20251215-11-MM-A for 15-L,180,4,none,2026-12-15,
+12,2025-12-15,Person 5,P902_E132_Master Mix Batching Record,,120,20251209-15-L,Batching Sheet,20251215-12-MM-B,20251215-12-MM-B for 15-L,180,4,Brij,2026-12-15,
+13,unlucky number 13 not used : (,,,,,,,,,,,,,
+14,2025-12-16,Person 5,P902_E141_Master Mix Batching Record,,,20251209-15-L,Batching Sheet,20251216-14-MM-B,20251216-14-MM-B For 15L,180,4,Brij,2026-12-16,
+15,2026-01-07,Person 2,P902_E147-MM-20260106-Mastermix Revamp Test,MSAT,10,20251219-16-L,Batching Sheet,20260107-15-MM-A,20260107-15-MM-A For 16L,180,4,none,2027-01-07,MC-3 is the associated Mastermix
+16,2026-01-20,Person 2,P902_E165-MM-20260120-Prepare Mastermix Concentrate (MMC) for 16-L,Nebula,15,20251219-16-L,Batching Sheet,20260120-16-MM-C,20260120-16-MM-C for 16L,180,4,concentrate,2027-01-20,
+17,2026-01-23,Person 2,E166_MM for 17-L internal teams,"Nebula, P412, VHH, MSAT, 100mL External kit",136,20260121-17-L,Batching Sheet,20260123-17-MM-C,20260123-17-MM-C for 17L,180,4,concentrate,2027-01-23,
+18,2026-02-06,Person 1,P902 E178 Bulk 1777863_77 prep,10mL External kit,80,20260121-17-L,Batching Sheet,20260206-18-MM-D,20260206-18-MM-D for 20260121-17-L,312,12,Economy,2027-02-06,
+19,2026-02-10,Person 2,P902_E181-RM-20260210-Preparation of MMC for Ready96 plates,"Ready96, MSAT",60,20251209-15-L,Batching Sheet,20260210-19-MM-C,20260210-19-MM-C for 20251209-15-L,180,4,concentrate,2027-02-10,used up all for CFPS Ready96 kits due to high dead volume and some problematic plates causing wastage
+20,2026-02-20,Person 2,P902_E187 Mastermix Batching Record,"Ready96, Nebula, MSAT, Premium Kit",74,20260121-17-L,Batching Sheet,20260220-20-MM-C,20260220-20-MM-C for 20260121-17-L,180,4,concentrate,2027-02-20,
+21,2026-03-02,Person 2,P902_E194-MM-20260302-Prepare MMSO (mastermix for salt optimization experiments),MSAT,12,Salt Opt,Batching Sheet,20260302-21-MM-SO,20260302-21-MM-SO for Salt Opt,-,-,SO,2027-03-02,
+22,2026-03-10,Person 6,"P902_E200-MM-20260303-Preparation of MMC based on 20L Salt Optima for internal use and MSAT experiments-E188, E193",MSAT,111.38,20260306-20-L,Batching Sheet,20260310-22-MM-C,20260310-22-MM-C for 20260306-20-L,260,4,concentrate,2027-03-10,
+23,2026-03-20,Person 1,20260317 MM,"Ready96, MSAT",100,20260316-L-21,Batching Sheet,20260320-23-MM-C,20260320-23-MM-C for 20260316-L-21,260,5,concentrate,2027-03-20,
+24,2026-03-20,Person 6,P902_E219-MM-20260320-Prepare Master Mix matching shuffle strain lysates,Internal orders,3,20260319-P932_Exp21-SHuffle lysate,Batching Sheet,20260320-24-MM-C,20260320-24-MM-C for 20260319-P932_Exp21-SHuffle lysate,240,4,concentrate,2027-03-20,
+25,2026-03-27,Person 6,P902_E226-MM-18991230-Prepare MMC for 22-L and 23-L,"MSAT, 10mL External kit, Internal orders, Premium Kit",200.4357,"20260326-L-22
+20260326-L-23",Batching Sheet,20260327-25-MM-C,"20260327-25-MM-C for 20260326-L-22
+20260326-L-23",280,5,concentrate,2027-03-27,
+26,2026-04-07,Person 1,P902 E236 SO Salt Optimization of MMD (again),"MSAT, Economy Kit",136,,Batching Sheet,20260407-26-MM-D,20260407-26-MM-D for N/A,,,Economy,2027-04-07,
+27,2026-04-08,Person 2,P902_E234-MM-20260408-Prepare Mastermix for Premium kit,"MSAT, Premium Kit",250,"20260326-L-22
+20260326-L-23",Batching Sheet,20260408-27-MM-C,"20260408-27-MM-C for 20260326-L-22
+20260326-L-23",280,5,concentrate,2027-04-08,
+,,,,,,,,,,,,,365,
+,,,,,,,,,,,,,365,`,
+
+  solubility_enhancer: `num,date_yymmdd,fte,lot,prepared_for,volume_per_tube_ml,num_tubes,total_volume,type,assumed_expiry,comments
+1,2026-04-02,Person 2/ Person 5,20260402-GR012-1,,1,208,208,,2026-10-01,
+2,2026-04-02,Person 2/ Person 5,20260402-GR012-2,,0.2,61,12.2,,2026-10-01,`,
+
+  premix: `num,date_yymmdd,fte,ratio_of_lysate:_mastermix,prepared_for,volume_created_ml,paired_lysate_lot,paired_mastermix_lot,unique_lot_number,lot_num__+_description
+1,2026-02-11,Person 2/ Person 5,1:1,CF-2602-4-12,80mL,20251209-15-L,20260210-19-MM-C,20260211-1-PM,
+2,2026-03-09,Person 6,1:1,Stability test,86,20260306-L-20,20260309-22-MM-C,20260309-2-PM,`,
+
+  plasmid: `plasmid,fte,date,sop,eln,batch_record,plasmid_lot_number,lot_number_of_azenta_stock,azenta_concentration_listed_-_ng_ul,azenta_concentration_nanodrop_-_ng_ul,volume_azenta_stock_ul,volume_water,final_concentration_nanodrop_-_ng_ul,final_concentration_-_nm
+1,Person 6,20251023,,ELN,P902 Plasmid stock calculator,20251023-1-P,10/16/2025 - Lot# 45946HK0926G_1_R1,1778,1670.7,869,6631,194.4,100.3924809
+2,Person 6,20260408,,ELN,P902 Plasmid stock calculator - batches,20260408-2-P,10/15/2025 - Lot# 45945HK0925G.1,1541,1484.7,333,2217,191.3,98.79157199`,
+
+  std_curves: `num,date_of_prep_yyyymmdd,operator,eln,test_experiment,sop__planning_gsheet,fluorescence_protein,aliquot_volume_ul,total_nº_of_pcr_strips_1_strip_=_1_std_curve,qc_-_r2,slope,y-_intercept,storage_location,range,comments,unnamed:_15
+1,20251008,Person 6,ELN,,,eGFP,50,8,0.998,3671,2769,P902 -80C Freezer space,0-32ug/mL,,
+2,20251008,Person 6,ELN,,,sfGFP,50,7,0.993,,,P902 -80C Freezer space,,,
+3,20251008,Person 2,ELN,,,eGFP,50,8,0.999,4400,969,P902 -80C Freezer space,0-32ug/mL,,
+4,20251008,Person 2,ELN,,,sfGFP,50,8,0.996,,,P902 -80C Freezer space,,,
+5,20251105,Person 6,ELN,,,eGFP,30,28,,,,,0-16 µg/mL,Curve failed QC,
+6,20251110,Person 6,,,P902-Standard curve preparation,eGFP,30,4,0.997,0.0294,1.3,P902 -80C Freezer space,0-115.2µg/mL,,
+7,20251111,Person 6,,,P902-Standard curve preparation,eGFP,30,10,0.999,0.025,1.62,P902 -80C Freezer space,0-113.28 µg/mL,,plotted fluorescence on X-axis and concentration on Y-axis
+8,20251118,Person 6,,,P902-Standard curve preparation,eGFP,30,8,0.998,0.0259,2.38,P902 -80C Freezer space,0-114.432 µg/mL,,plotted fluorescence on X-axis and concentration on Y-axis
+9,20251203,Person 2,,,,eGFP,30,7,0.999,34.21,-52.37,P902 -80C Freezer space,1-128 µg/mL,used intermittently for linear DNA tests,plotted fluorescence on y-axis and concentration on x-axis
+10,20251203,Person 2,,,,sfGFP,30,10,0.999,52.19,-16.17,P902 -80C Freezer space,1-128 µg/mL,Plasmid DNA based Abs Quant uses sfGFP instead of eGFP now,plotted fluorescence on y-axis and concentration on x-axis
+11,20250203,Person 2,,,,sfGFP,35,13,0.99,0.02,0.52,P902 -80C Freezer space,1-128 µg/mL,Plasmid DNA based Abs Quant uses sfGFP instead of eGFP now,plotted fluorescence on X-axis and concentration on Y-axis
+12,20250310,Person 6,,E208,P902_E208-QC-20260309-Preparation of sfGFP standard curve,sfGFP,35,17,0.9921,0.0213,0.4826,"P902 -80C Big Freezer space, Miscellaneous drawer",1-128 µg/mL,,plotted fluorescence on X-axis and concentration on Y-axis
+13,,,,,,,,,,,,,,,`,
+
+  controls: `num,date_of_prep_yyyymmdd,operator,eln,fluorescence_protein,aliquot_volume_ul,total_volume_ul,storage_location,notes,run1_-_e61,run2-e75,run3-e78,run4-e104,run5
+1,20251010,Person 2,,eGFP,10,400,P902 -80C Freezer space,0.5mg/mL,0.525,0.44,0.47,,
+2,20251105,Person 6,,eGFP,10,260,P902 -80C Freezer space,failed QC,,,,,
+3,20251106,Person 2,20251105-E99-Standard curve setup,eGFP,10,140,P902 -80C Freezer space,0.5mg/mL,-,-,-,0.45,
+4,20251103,Person 2,P902_E123-RM-20251103-Prepare bulk eGFP standard curve and spike-in controls with C11 Lysate,eGFP,10,200,P902 -80C Freezer space,0.5mg/mL,0.642 (E129),0.547 (E137),,,
+5,20251103,Person 2,P902_E124-RM-20251103-Prepare standard curves and spike-in controls using sfGFP,sfGFP,10,200,P902 -80C Freezer space,0.5mg/mL,0.589 (E129),0.527 (E137),,,
+6,,,,,,,,,,,,,
+7,,,,,,,,,,,,,
+8,,,,,,,,,,,,,
+9,,,,,,,,,,,,,
+10,,,,,,,,,,,,,`,
+
+  cf_product: `seq_num,date_yymm,date_dd,lysate_lot,so_mm_lot_a,so_mm_lot_b,mscarlett_lot,reaction_volume_ml,kits_1ml,kits_10ml,kits_100ml,version,lot_number,product_version,cf_size1,cf_size2,cf_size3,expiry_date,internal,labels_1ml,labels_10ml,labels_100ml,coa,old_lot_number,plasmid
+1,2504,10,,,,,,,,,1,CF-2504-1-1,,,,,260410,,,,,,20250410_006,
+2,2508,20,,,,,,,,,1,CF-2508-1-2,,,,,260820,,,,,,202508_01,
+3,2509,17,,,,,,,,,1,CF-2509-1-3,,,,,260917,,,,,,,
+4,2510,31,20251024-12-L,20251103-5-MM-A,20251031-4-MM-B,20251023-1-P,105,65,4,,1,CF-2510-1-4,"CF001, CF002",CF001,CF002,,261031,,CF-2510-1-4  1mL kit,CF-2510-1-4 10mL kits,,CF-2510-1-4 CoA,,x
+5,2511,6,20251024-12-L,20251029-1-MM-A,20251103-6-MM-B,20251023-1-P,100,,,1,1,CF-2511-1-5,CF003,,,CF003,26116,,CF-2511-1-5 1mL kit,CF-2511-1-5 10mL kits,,CF-2511-1-5 COA,,x
+6,2511,6,20251024-12-L,20251103-5-MM-A,20251103-6-MM-B,20251023-1-P,240,35,14,,1,CF-2511-1-6,"CF001, CF002",CF001,CF002,,26116,,CF-2511-1  1mL kit,CF-2511-1-6 10mL kits,,CF-2511-1-6 CoA,,
+7,2512,12,20251125-14-L,20251210-9-MM-A,20251210-10-MM-B,20251023-1-P,110,,11,,1,CF-2512-1-7,CF002,,CF002,,261212,,CF-2512-1-7  1mL kit,CF-2512-1-7 10mL kits,CF-2512-1-7 100mL kits,CF-2512-1-7 COA,,
+8,2512,12,20251209-15-L,20251215-11-MM-A,20251215-12-MM-B,20251023-1-P,168,,,2,1,CF-2512-1-8,CF003,,,CF003,261212,,,,CF-2512-1-8 100mL kits,,,
+9,2602,11,20251125-14-L,20260206-18-MM-D,,20251023-1-P,,,6,,3,CF-2602-3-9,CF012,,CF012,,261125,,,CF-2602-3-9,,,,
+10,2602,11,20251209-15-L,20260206-18-MM-D,,20251023-1-P,,,4,,3,CF-2602-3-10,CF012,,CF012,,261209,,,CF-2602-3-9,,,,
+11,2602,11,20260121-17-L,20260206-18-MM-D,,20251023-1-P,,40,,,3,CF-2602-3-11,CF011,CF011,,,270121,,,2602-3-11 CFPS Economy 1 mL Kits,,,,
+12,2602,11,20251209-15-L,20260210-19-MM-C,,20251023-1-P,,2,2,1,4,CF-2602-4-12,"CF101, CF102",CF101,CF102,CF103,270121,"40 Internal, 60 total",Template: CFPS Ready96 kit CF101-CF103,Template: CFPS Ready96 kit CF101-CF103,,no,,Control Plasmid Label
+13,2602,18,20260121-17-L,20260210-19-MM-C,,20251023-1-P,,3,,,4,CF-2602-4-13,CF101,CF101,,,270218,3 total internal,CF-2602-4-13: CFPS Ready96 kit CF101,,,,,
+14,2603,24,20260316-21-L,20260320-23-MM-C,,20251023-1-P,,,,,4,CF-2603-4-14,"CF101, CF001",CF101,,,270324,35 internal,,,,,,
+15,2604,2,20260326-L-22,20260327-25-MM-C,,20251023-1-P,,,,,4,CF-2604-4-15,"CF101, CF001",CF101,,,27042,34 internal,,,,,,
+16,2604,3,20260326-L-22,20260327-25-MM-C,,20251023-1-P,,,,,4,CF-2604-4-16,"CF101, CF001",,,,27043,,27043,,,,,`,
+
+  pre_so_mm: `date_yymmdd,fte,batching_sheet_link,eln,volume_created_ml,lysates_optimized,sop_used,use,experiment_number,lot_name
+2025-08-27,Person 1 Person 2,20250827 P902 E16 Salt Optimization Echo setup,,3.6,R&D,,R&D,P902_E16,
+2025-09-04,Person 2,20250904 P902 E33 Lysis Test 2 Salt Optimization Echo setup,,,,,,,
+2025-09-19,Person 2 Person 4,20250919 P902 E49 Salt Optimization Echo setup,,,"20250918-L-5
+20250918-L-6
+20250918-L-7",,,,
+2025-10-07,Person 2,,,4,20250918-E48-F11,-,R&D,E64,
+2025-10-09,Person 2,20251009 P902 E66 Salt Optimization Repeat,,3,,-,,E66,
+2025-10-16,Person 2,P902_E74-SO-20251015-SO for pellet from 20250930 Fermentation,,12,,-,R&D,"E74, E77",20251016-MM
+2025-10-22,Person 2,P902_E80 Troubleshooting MM,,3,-,-,R&D,E80,20251021-MM
+2025-11-07,Person 2,,,,,,,,
+2025-12-04,Person 2,P902_E125-MM-20251204-Non-salt optimized Mastermix Concentrate,-,20,-,-,R&D,,MM_20251204`,
+
+  delivered_material: `reagent,2025_openai,2025_dp,2025_biofab,2025_other,2026_openai,2026_dp,2026_biofab,2026_other,2026_proj_openai,2026_proj_dp,2026_proj_biofab,2026_proj_other
+Lysate,3.1 L,10 mL,,,660 mL,,,,600 mL,,,10 mL
+Mastermix,20 mL,16 mL,,,,,,,,,,20 mL
+sfGFP,9.6 mL @ 1200 uM,,,.1 mL @ 1750 uM,10 mL @ 1750 uM,,,.1 mL @ 1750 uM,,,,
+Plasmid,,,,,,,,,200 mL @ 50 nM,,,
+MutS,,,190 mL @ 27 mg/mL,,,,,,,,,
+Other,,,,,,,,,,,,Soln: ~5-10 mg of Glycoprotein`,
+
+};
+
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+const tables = {};       // key → { headers: [], rows: [[]], originalCSV: '' }
+const modifications = {}; // key → Set of 'r,c' strings
+const newRows = {};      // key → Set of row indices
+const deletedRows = {};  // key → Set of row indices
+let activeTab = CSV_FILES[0].key;
+let searchTerm = '';
+let sortState = {};      // key → { col, asc }
+let selectedRows = {};   // key → Set of row indices
+
+// ═══════════════════════════════════════════════════════════
+//  CSV PARSING & SERIALIZATION
+// ═══════════════════════════════════════════════════════════
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i <= text.length; i++) {
+    const ch = i < text.length ? text[i] : '\n';
+    if (i === text.length && field === '' && row.length === 0) break;
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i+1 < text.length && text[i+1] === '"') { field += '"'; i++; }
+        else { inQuotes = false; }
+      } else { field += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { row.push(field); field = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        row.push(field); field = '';
+        if (ch === '\r' && i+1 < text.length && text[i+1] === '\n') i++;
+        if (row.length > 1 || (row.length === 1 && row[0] !== '')) rows.push(row);
+        row = [];
+      } else { field += ch; }
+    }
+  }
+  return rows;
+}
+
+function serializeCSV(headers, rows) {
+  const esc = v => {
+    const s = v === null || v === undefined ? '' : String(v);
+    if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0)
+      return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  };
+  let csv = headers.map(esc).join(',') + '\n';
+  rows.forEach(row => {
+    csv += row.map(esc).join(',') + '\n';
+  });
+  return csv;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DATA LOADING — GitLab API first, embedded fallback
+//  The embedded CSV is a snapshot for offline/unconfigured use.
+//  When GitLab is configured, we always fetch live data.
+// ═══════════════════════════════════════════════════════════
+function loadFromText(key, text) {
+  const parsed = parseCSV(text);
+  if (parsed.length === 0) {
+    tables[key] = { headers: [], rows: [], originalCSV: text };
+  } else {
+    const headers = parsed[0];
+    const rows = parsed.slice(1);
+    rows.forEach(r => { while (r.length < headers.length) r.push(''); });
+    tables[key] = { headers, rows, originalCSV: text };
+  }
+  modifications[key] = new Set();
+  newRows[key] = new Set();
+  deletedRows[key] = new Set();
+  selectedRows[key] = new Set();
+}
+
+function loadAllFromEmbedded() {
+  for (const cf of CSV_FILES) {
+    loadFromText(cf.key, EMBEDDED_CSV[cf.key] || '');
+  }
+}
+
+async function fetchCSVFromGitHub(gl, filePath) {
+  const resp = await fetch(
+    'https://api.github.com/repos/' + gl.project + '/contents/' +
+    encodeURIComponent(filePath) + '?ref=' + encodeURIComponent(gl.branch),
+    { headers: { 'Authorization': 'Bearer ' + gl.token, 'Accept': 'application/vnd.github.v3+json' } }
+  );
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const data = await resp.json();
+  return atob(data.content.replace(/\n/g, ''));
+}
+
+async function loadAllFromGitHub(gl) {
+  let loaded = 0, failed = 0;
+  for (const cf of CSV_FILES) {
+    try {
+      const text = await fetchCSVFromGitHub(gl, 'data/lots/' + cf.file);
+      loadFromText(cf.key, text);
+      loaded++;
+    } catch (e) {
+      console.warn('GitHub fetch failed for ' + cf.file + ':', e.message);
+      // Fall back to embedded for this file
+      loadFromText(cf.key, EMBEDDED_CSV[cf.key] || '');
+      failed++;
+    }
+  }
+  return { loaded, failed };
+}
+
+async function initData() {
+  const gl = saveGLSettings();
+  if (gl.project && gl.token) {
+    const status = document.getElementById('glStatus');
+    status.className = 'gl-status show info';
+    status.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:1.5px;vertical-align:middle;margin-right:6px"></span>Loading live data from GitHub…';
+    try {
+      const result = await loadAllFromGitHub(gl);
+      if (result.failed === 0) {
+        status.className = 'gl-status show ok';
+        status.innerHTML = '<strong>Loaded ' + result.loaded + ' tables</strong> live from GitHub <code>' + gl.branch + '</code>';
+      } else {
+        status.className = 'gl-status show info';
+        status.innerHTML = '<strong>' + result.loaded + ' tables from GitHub</strong>, ' + result.failed + ' fell back to embedded snapshot';
+      }
+      setTimeout(() => { status.className = 'gl-status'; }, 6000);
+    } catch (e) {
+      status.className = 'gl-status show err';
+      status.innerHTML = '<strong>GitHub load failed</strong> — using embedded snapshot. ' + esc(e.message);
+      loadAllFromEmbedded();
+      setTimeout(() => { status.className = 'gl-status'; }, 6000);
+    }
+  } else {
+    // No GitLab configured — use embedded data
+    loadAllFromEmbedded();
+  }
+}
+
+async function pullFromGitLab() {
+  const gl = saveGLSettings();
+  if (!gl.project || !gl.token) {
+    showToast('Configure GitHub settings first');
+    document.getElementById('glPanel').open = true;
+    return;
+  }
+
+  if (getTotalChanges() > 0) {
+    document.getElementById('confirmTitle').textContent = 'Discard local changes?';
+    document.getElementById('confirmText').textContent = 'Pulling from GitHub will replace all tables with the latest repo data. You have ' + getTotalChanges() + ' unsaved change(s) that will be lost.';
+    const btn = document.getElementById('confirmAction');
+    btn.textContent = 'Pull & discard';
+    btn.className = 'btn-danger';
+    btn.onclick = () => { closeConfirm(); doPull(gl); };
+    document.getElementById('confirmModal').classList.add('open');
+    return;
+  }
+  doPull(gl);
+}
+
+async function doPull(gl) {
+  const status = document.getElementById('glStatus');
+  status.className = 'gl-status show info';
+  status.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:1.5px;vertical-align:middle;margin-right:6px"></span>Pulling latest data from GitHub…';
+  document.getElementById('glPanel').open = true;
+
+  try {
+    const result = await loadAllFromGitHub(gl);
+    renderTabs();
+    renderTable();
+    updateStatus();
+    updateFooter();
+    if (result.failed === 0) {
+      status.className = 'gl-status show ok';
+      status.innerHTML = '<strong>Pulled ' + result.loaded + ' tables</strong> from <code>' + gl.branch + '</code>';
+      showToast('All tables refreshed from GitHub');
+    } else {
+      status.className = 'gl-status show info';
+      status.innerHTML = '<strong>' + result.loaded + ' pulled</strong>, ' + result.failed + ' failed (kept embedded)';
+      showToast(result.loaded + ' tables pulled, ' + result.failed + ' failed');
+    }
+    setTimeout(() => { status.className = 'gl-status'; }, 6000);
+  } catch (e) {
+    status.className = 'gl-status show err';
+    status.innerHTML = '<strong>Pull failed</strong>: ' + esc(e.message);
+    showToast('Pull failed — see error details');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════
+function esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function renderTabs() {
+  const el = document.getElementById('tabBar');
+  el.innerHTML = CSV_FILES.map(cf => {
+    const t = tables[cf.key];
+    const count = t ? t.rows.length : 0;
+    const active = cf.key === activeTab ? ' active' : '';
+    const modified = (modifications[cf.key]?.size > 0 || newRows[cf.key]?.size > 0 || deletedRows[cf.key]?.size > 0) ? ' modified' : '';
+    return '<button class="tab-btn'+active+modified+'" data-tab="'+cf.key+'">'+esc(cf.label)+
+      '<span class="tab-count">'+count+'</span></button>';
+  }).join('');
+  el.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.onclick = () => switchTab(btn.dataset.tab);
+  });
+}
+
+function switchTab(key) {
+  activeTab = key;
+  searchTerm = '';
+  document.getElementById('searchInput').value = '';
+  renderTabs();
+  renderTable();
+  updateFooter();
+}
+
+function renderTable() {
+  const container = document.getElementById('tableContainer');
+  const t = tables[activeTab];
+  if (!t || !t.headers.length) {
+    container.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--text3);font-style:italic">No data loaded for this table.</div>';
+    return;
+  }
+
+  const ss = sortState[activeTab];
+  const term = searchTerm.toLowerCase();
+  const deleted = deletedRows[activeTab] || new Set();
+  const mods = modifications[activeTab] || new Set();
+  const newR = newRows[activeTab] || new Set();
+  const sel = selectedRows[activeTab] || new Set();
+
+  // Build filtered row indices
+  let indices = [];
+  for (let i = 0; i < t.rows.length; i++) {
+    if (deleted.has(i)) continue;
+    if (term) {
+      const match = t.rows[i].some(c => String(c).toLowerCase().includes(term));
+      if (!match) continue;
+    }
+    indices.push(i);
+  }
+
+  // Sort
+  if (ss) {
+    indices.sort((a, b) => {
+      let va = t.rows[a][ss.col] || '';
+      let vb = t.rows[b][ss.col] || '';
+      const na = Number(va), nb = Number(vb);
+      if (!isNaN(na) && !isNaN(nb) && va !== '' && vb !== '') return ss.asc ? na-nb : nb-na;
+      return ss.asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+  }
+
+  let html = '<table class="raw-table"><thead><tr>';
+  html += '<th class="row-num">#</th>';
+  t.headers.forEach((h, ci) => {
+    const sorted = ss && ss.col === ci;
+    const arrow = sorted ? (ss.asc ? '▲' : '▼') : '⇅';
+    html += '<th class="'+(sorted?'sorted':'')+'" onclick="sortColumn('+ci+')">'+esc(h)+
+      '<span class="sort-icon">'+arrow+'</span></th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  if (!indices.length) {
+    html += '<tr><td colspan="'+(t.headers.length+1)+'" style="text-align:center;color:var(--text3);padding:2rem;font-family:DM Sans,sans-serif;font-style:italic">No rows match</td></tr>';
+  }
+
+  indices.forEach(ri => {
+    const isNew = newR.has(ri);
+    const isSel = sel.has(ri);
+    const rowClass = isNew ? ' class="new-row"' : isSel ? ' class="selected-row"' : '';
+    html += '<tr'+rowClass+'>';
+    html += '<td class="row-num-cell'+(isSel?' selected':'')+'" onclick="toggleRowSelect('+ri+')" title="Row '+(ri+1)+' — click to select">'+(ri+1)+'</td>';
+    t.rows[ri].forEach((cell, ci) => {
+      const isModified = mods.has(ri+','+ci);
+      html += '<td><input class="cell-input'+(isModified?' modified':'')+'" '+
+        'data-r="'+ri+'" data-c="'+ci+'" '+
+        'value="'+esc(cell)+'" '+
+        'onfocus="onCellFocus(this)" '+
+        'onblur="onCellBlur(this)" '+
+        'onkeydown="onCellKeydown(event,this)"'+
+        '></td>';
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function onCellFocus(el) {
+  el._origValue = el.value;
+}
+
+function onCellBlur(el) {
+  const r = parseInt(el.dataset.r);
+  const c = parseInt(el.dataset.c);
+  const newVal = el.value;
+  const t = tables[activeTab];
+  if (el._origValue !== newVal) {
+    t.rows[r][c] = newVal;
+    modifications[activeTab].add(r+','+c);
+    el.classList.add('modified');
+    updateStatus();
+  }
+}
+
+function onCellKeydown(e, el) {
+  if (e.key === 'Tab' || e.key === 'Enter') {
+    e.preventDefault();
+    const r = parseInt(el.dataset.r);
+    const c = parseInt(el.dataset.c);
+    const t = tables[activeTab];
+    let nextR = r, nextC = c;
+    if (e.key === 'Tab' && e.shiftKey) {
+      nextC--; if (nextC < 0) { nextC = t.headers.length-1; nextR--; }
+    } else if (e.key === 'Tab') {
+      nextC++; if (nextC >= t.headers.length) { nextC = 0; nextR++; }
+    } else if (e.key === 'Enter' && e.shiftKey) {
+      nextR--;
+    } else if (e.key === 'Enter') {
+      nextR++;
+    }
+    const next = document.querySelector('.cell-input[data-r="'+nextR+'"][data-c="'+nextC+'"]');
+    if (next) { el.blur(); next.focus(); next.select(); }
+    else { el.blur(); }
+  }
+}
+
+function toggleRowSelect(ri) {
+  const sel = selectedRows[activeTab];
+  if (sel.has(ri)) sel.delete(ri);
+  else sel.add(ri);
+  renderTable();
+}
+
+function onSearch(val) {
+  searchTerm = val;
+  renderTable();
+  updateFooter();
+}
+
+function sortColumn(ci) {
+  const ss = sortState[activeTab];
+  sortState[activeTab] = (ss && ss.col === ci) ? {col:ci, asc:!ss.asc} : {col:ci, asc:true};
+  renderTable();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ROW OPERATIONS
+// ═══════════════════════════════════════════════════════════
+function addRow() {
+  const t = tables[activeTab];
+  if (!t || !t.headers.length) return;
+  const newRow = new Array(t.headers.length).fill('');
+  const idx = t.rows.length;
+  t.rows.push(newRow);
+  newRows[activeTab].add(idx);
+  renderTabs();
+  renderTable();
+  updateStatus();
+  updateFooter();
+  // Scroll to bottom and focus first cell
+  const container = document.getElementById('tableContainer');
+  setTimeout(() => {
+    container.scrollTop = container.scrollHeight;
+    const firstCell = document.querySelector('.cell-input[data-r="'+idx+'"][data-c="0"]');
+    if (firstCell) { firstCell.focus(); firstCell.select(); }
+  }, 50);
+}
+
+function confirmDeleteSelected() {
+  const sel = selectedRows[activeTab];
+  if (sel.size === 0) { showToast('Select rows by clicking row numbers first'); return; }
+  document.getElementById('confirmTitle').textContent = 'Delete '+sel.size+' row'+(sel.size>1?'s':'')+'?';
+  document.getElementById('confirmText').textContent = 'This will mark '+sel.size+' row'+(sel.size>1?'s':'')+' for deletion. Push to GitLab to persist the change, or export to save locally.';
+  document.getElementById('confirmAction').onclick = () => { deleteSelected(); closeConfirm(); };
+  document.getElementById('confirmModal').classList.add('open');
+}
+
+function deleteSelected() {
+  const sel = selectedRows[activeTab];
+  sel.forEach(ri => deletedRows[activeTab].add(ri));
+  selectedRows[activeTab] = new Set();
+  renderTabs();
+  renderTable();
+  updateStatus();
+  updateFooter();
+  showToast('Marked '+sel.size+' row'+(sel.size>1?'s':'')+' for deletion');
+}
+
+function closeConfirm() {
+  document.getElementById('confirmModal').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  COLUMN EDITOR
+// ═══════════════════════════════════════════════════════════
+function editColumns() {
+  const t = tables[activeTab];
+  if (!t) return;
+  const fields = document.getElementById('colEditorFields');
+  fields.innerHTML = t.headers.map((h, i) =>
+    '<div class="col-editor-field"><span class="col-idx">'+i+'</span>'+
+    '<input id="colEdit-'+i+'" value="'+esc(h)+'"></div>'
+  ).join('');
+  document.getElementById('colModal').classList.add('open');
+}
+
+function saveColumns() {
+  const t = tables[activeTab];
+  if (!t) return;
+  t.headers.forEach((h, i) => {
+    const inp = document.getElementById('colEdit-'+i);
+    if (inp && inp.value.trim() !== h) {
+      t.headers[i] = inp.value.trim();
+      modifications[activeTab].add('header-'+i);
+    }
+  });
+  closeColEditor();
+  renderTable();
+  updateStatus();
+  showToast('Column headers updated');
+}
+
+function closeColEditor() {
+  document.getElementById('colModal').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EXPORT CSV
+// ═══════════════════════════════════════════════════════════
+function exportCSV() {
+  const t = tables[activeTab];
+  if (!t) return;
+  const deleted = deletedRows[activeTab] || new Set();
+  const filteredRows = t.rows.filter((_, i) => !deleted.has(i));
+  const csv = serializeCSV(t.headers, filteredRows);
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const cf = CSV_FILES.find(c => c.key === activeTab);
+  a.download = cf ? cf.file : activeTab + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('Exported ' + (cf ? cf.label : activeTab) + ' as CSV');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  STATUS
+// ═══════════════════════════════════════════════════════════
+function getTotalChanges() {
+  let total = 0;
+  CSV_FILES.forEach(cf => {
+    total += (modifications[cf.key]?.size || 0);
+    total += (newRows[cf.key]?.size || 0);
+    total += (deletedRows[cf.key]?.size || 0);
+  });
+  return total;
+}
+
+function updateStatus() {
+  const total = getTotalChanges();
+  const badge = document.getElementById('statusBadge');
+  const text = document.getElementById('statusText');
+  if (total > 0) {
+    badge.className = 'status-badge unsaved';
+    text.textContent = total + ' change' + (total>1?'s':'') + ' unsaved';
+  } else {
+    badge.className = 'status-badge saved';
+    text.textContent = 'no changes';
+  }
+  const changeInfo = document.getElementById('changeInfo');
+  if (total > 0) {
+    const mCount = modifications[activeTab]?.size || 0;
+    const nCount = newRows[activeTab]?.size || 0;
+    const dCount = deletedRows[activeTab]?.size || 0;
+    const parts = [];
+    if (mCount) parts.push(mCount + ' edits');
+    if (nCount) parts.push(nCount + ' new');
+    if (dCount) parts.push(dCount + ' deleted');
+    changeInfo.textContent = parts.length ? 'This table: ' + parts.join(', ') : '';
+  } else {
+    changeInfo.textContent = '';
+  }
+  renderTabs();
+}
+
+function updateFooter() {
+  const t = tables[activeTab];
+  const deleted = deletedRows[activeTab]?.size || 0;
+  const total = t ? t.rows.length - deleted : 0;
+  const vis = searchTerm ? document.querySelectorAll('.raw-table tbody tr').length : total;
+  document.getElementById('rowInfo').textContent = vis + ' row' + (vis!==1?'s':'') +
+    (searchTerm ? ' (filtered from ' + total + ')' : '') +
+    ' · ' + (t ? t.headers.length : 0) + ' columns';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════════
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GITLAB SETTINGS (identical pattern to lot_browser)
+// ═══════════════════════════════════════════════════════════
+function loadGLSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('lot_gl_settings') || '{}');
+    if (s.project) document.getElementById('glProject').value = s.project;
+    if (s.branch) document.getElementById('glBranch').value = s.branch;
+    if (s.token) document.getElementById('glToken').value = s.token;
+    updateGLTag();
+  } catch (e) {}
+}
+function saveGLSettings() {
+  const s = {
+    project: document.getElementById('glProject').value.trim(),
+    branch: document.getElementById('glBranch').value.trim() || 'main',
+    token: document.getElementById('glToken').value.trim()
+  };
+  try { localStorage.setItem('lot_gl_settings', JSON.stringify(s)); } catch (e) {}
+  updateGLTag();
+  return s;
+}
+function clearGLSettings() {
+  try { localStorage.removeItem('lot_gl_settings'); } catch (e) {}
+  document.getElementById('glProject').value = '';
+  document.getElementById('glBranch').value = 'main';
+  document.getElementById('glToken').value = '';
+  updateGLTag();
+}
+function updateGLTag() {
+  const tag = document.getElementById('glTag');
+  const proj = document.getElementById('glProject').value.trim();
+  const tok = document.getElementById('glToken').value.trim();
+  if (proj && tok) { tag.textContent = 'connected'; tag.className = 'gl-tag'; }
+  else { tag.textContent = 'not configured'; tag.className = 'gl-tag disconnected'; }
+}
+function toggleTokenVis() {
+  const inp = document.getElementById('glToken');
+  const btn = document.getElementById('toggleTok');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = 'Hide'; }
+  else { inp.type = 'password'; btn.textContent = 'Show'; }
+}
+['glProject','glToken'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => saveGLSettings());
+});
+document.getElementById('glBranch').addEventListener('change', () => saveGLSettings());
+
+// ═══════════════════════════════════════════════════════════
+//  GITLAB PUSH — push ALL modified tables
+// ═══════════════════════════════════════════════════════════
+async function pushAllChanges() {
+  const gl = saveGLSettings();
+  if (!gl.project || !gl.token) {
+    showToast('Configure GitLab settings first');
+    document.getElementById('glPanel').open = true;
+    return;
+  }
+
+  const total = getTotalChanges();
+  if (total === 0) { showToast('No changes to push'); return; }
+
+  const status = document.getElementById('glStatus');
+  status.className = 'gl-status show info';
+  status.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:1.5px;vertical-align:middle;margin-right:6px"></span>Pushing changes to GitHub…';
+
+  // Collect all modified tables
+  const filesToPush = [];
+  for (const cf of CSV_FILES) {
+    const hasChanges = (modifications[cf.key]?.size > 0) || (newRows[cf.key]?.size > 0) || (deletedRows[cf.key]?.size > 0);
+    if (!hasChanges) continue;
+    const t = tables[cf.key];
+    if (!t) continue;
+    const deleted = deletedRows[cf.key] || new Set();
+    const filteredRows = t.rows.filter((_, i) => !deleted.has(i));
+    const csv = serializeCSV(t.headers, filteredRows);
+    filesToPush.push({
+      file_path: 'data/lots/' + cf.file,
+      content: csv
+    });
+  }
+
+  if (filesToPush.length === 0) { showToast('No file changes to push'); return; }
+
+  try {
+    // Push each file individually via GitHub Contents API
+    let pushed = 0;
+    let lastSha = '';
+    for (const fp of filesToPush) {
+      // Get current file SHA (needed for updates)
+      let fileSha = null;
+      try {
+        const getResp = await fetch('https://api.github.com/repos/' + gl.project + '/contents/' + encodeURIComponent(fp.file_path) + '?ref=' + encodeURIComponent(gl.branch), {
+          headers: { 'Authorization': 'Bearer ' + gl.token, 'Accept': 'application/vnd.github.v3+json' }
+        });
+        if (getResp.ok) {
+          const getdata = await getResp.json();
+          fileSha = getdata.sha;
+        }
+      } catch (e) { /* new file */ }
+
+      const payload = {
+        message: '[Raw Editor] Update ' + fp.file_path.split('/').pop(),
+        content: btoa(unescape(encodeURIComponent(fp.content))),
+        branch: gl.branch
+      };
+      if (fileSha) payload.sha = fileSha;
+
+      const resp = await fetch('https://api.github.com/repos/' + gl.project + '/contents/' + encodeURIComponent(fp.file_path), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + gl.token, 'Accept': 'application/vnd.github.v3+json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.commit && data.commit.sha) lastSha = data.commit.sha.substring(0, 8);
+        pushed++;
+      } else {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error('Failed to push ' + fp.file_path + ': ' + (errData.message || resp.statusText));
+      }
+    }
+
+    status.className = 'gl-status show ok';
+    status.innerHTML = '<strong>Committed</strong> — ' + pushed + ' file' + (pushed>1?'s':'') +
+      ' → <code>' + gl.branch + '</code>' + (lastSha ? ' · <code>' + lastSha + '</code>' : '');
+
+    // Clear modification tracking & apply deletions permanently
+    for (const cf of CSV_FILES) {
+      if (deletedRows[cf.key]?.size > 0) {
+        const deleted = deletedRows[cf.key];
+        tables[cf.key].rows = tables[cf.key].rows.filter((_, i) => !deleted.has(i));
+      }
+      modifications[cf.key] = new Set();
+      newRows[cf.key] = new Set();
+      deletedRows[cf.key] = new Set();
+      selectedRows[cf.key] = new Set();
+    }
+    renderTabs();
+    renderTable();
+    updateStatus();
+    updateFooter();
+    showToast('All changes pushed to GitHub');
+    setTimeout(() => { status.className = 'gl-status'; }, 8000);
+  } catch (err) {
+    status.className = 'gl-status show err';
+    status.innerHTML = '<strong>Push failed</strong>: ' + esc(String(err.message));
+    showToast('Push failed — see error above');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeConfirm();
+    closeColEditor();
+  }
+  // Ctrl+S → push
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    pushAllChanges();
+  }
+});
+document.getElementById('confirmModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('confirmModal')) closeConfirm();
+});
+document.getElementById('colModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('colModal')) closeColEditor();
+});
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+(async function init() {
+  loadGLSettings();
+  await initData();
+  renderTabs();
+  renderTable();
+  updateStatus();
+  updateFooter();
+})();
+</script>
+
+<script src="shared/help-widget.js"></script>
+<button class="help-fab" id="helpFab" onclick="toggleHelp()" title="Help">?</button>
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()"></div>
+<div class="help-modal" id="helpModal">
+  <button class="help-close" onclick="toggleHelp()">&times;</button>
+  <div class="help-modal-head"><h2>Lot Raw Table Editor — Help</h2><p>Directly edit lot CSV data with inline editing</p></div>
+  <div class="help-modal-body"><h3>Navigation</h3>
+<p>Use <strong>tabs</strong> to switch between lot CSV files. Each tab corresponds to a file in <code>data/lots/</code>.</p>
+
+<h3>Editing</h3>
+<ul>
+<li><strong>Click a cell</strong> to edit its value inline. Press <span class="help-key">Enter</span> or <span class="help-key">Tab</span> to confirm. Press <span class="help-key">Esc</span> to cancel.</li>
+<li><strong>Changed cells</strong> are highlighted so you can track your edits.</li>
+</ul>
+
+<h3>Row Operations</h3>
+<ul>
+<li><strong>Add Row</strong> — Appends a new empty row to the bottom of the table.</li>
+<li><strong>Select Rows</strong> — Click the row number to select/deselect a row.</li>
+<li><strong>Delete Selected</strong> — Removes all selected rows (with confirmation).</li>
+</ul>
+
+<h3>Column Management</h3>
+<p>Click <strong>Edit Columns</strong> to open the column editor. You can add new columns, rename existing ones, reorder them, or delete columns.</p>
+
+<h3>Search &amp; Sort</h3>
+<p>Use the search bar to filter rows. Click column headers to sort.</p>
+
+<h3>GitLab Integration</h3>
+<ul>
+<li><strong>Pull from GitLab</strong> — Fetch the latest CSV data from the repository, replacing your local copy.</li>
+<li><strong>Push to GitLab</strong> — Commit all your changes back to the repository. A change summary is shown before pushing.</li>
+</ul>
+
+<h3>Change Tracking</h3>
+<p>The footer bar shows the number of edits, new rows, and deleted rows. This helps you review changes before pushing.</p>
+
+<h3>Export</h3>
+<p>Click <strong>Export CSV</strong> to download the current table state as a CSV file.</p></div>
+</div>
+
+</body>
+</html>

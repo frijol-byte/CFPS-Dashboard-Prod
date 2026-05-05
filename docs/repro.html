@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<title>CFPS Dashboard</title>
+<link rel="stylesheet" href="shared/dashboard.css">
+<link rel="stylesheet" href="shared/help-widget.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+</head>
+<body>
+<a class="home-btn" href="index.html"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>Toolkit</a>
+<div id="app"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script src="data_loader.js"></script>
+<script src="shared/parse-csv.js"></script>
+<script type="text/babel" src="shared/dashboard-shared.jsx"></script>
+<script type="text/babel">
+
+// ── Trend chart: tracks a component across experiments with group/subgroup ──
+function TrendChart({data,defaultGroup,title,color,tipRef}){
+  const[tip,setTip]=tipRef;
+  const[gBy,setGBy]=useState(defaultGroup||"lysate");
+  const[sgBy,setSgBy]=useState("none");
+  const[sg2By,setSg2By]=useState("none");
+
+  const groups=useMemo(()=>{
+    const g={};
+    data.forEach(r=>{
+      const p=gL(r,gBy),s2=sgBy&&sgBy!=="none"?gL(r,sgBy):null,s3=sg2By&&sg2By!=="none"&&sgBy!=="none"?gL(r,sg2By):null;
+      const label=[p,s2,s3].filter(Boolean).join(" · ");
+      if(!label)return;
+      if(!g[label])g[label]={};
+      if(!g[label][r.eid])g[label][r.eid]=[];
+      g[label][r.eid].push(r.conc);
+    });
+    return g;
+  },[data,gBy,sgBy,sg2By]);
+  const keys=useMemo(()=>Object.keys(groups).sort(),[groups]);
+  const exps=useMemo(()=>{const s={};data.forEach(r=>{s[r.eid]=1});return Object.keys(s).sort();},[data]);
+  const colors=useMemo(()=>{const c={};keys.forEach((k,i)=>c[k]=PAL[i%PAL.length]);return c;},[keys]);
+
+  const stats=useMemo(()=>{
+    const s={};keys.forEach(k=>{s[k]={};exps.forEach(e=>{const v=groups[k]&&groups[k][e];if(v&&v.length){const c=iqrClean(v);s[k][e]={m:mn(c),s:c.length>1?stdev(c):0,n:v.length};}});});return s;
+  },[groups,keys,exps]);
+
+  const W=680,H=210,pad={t:14,r:14,b:36,l:54},iw=W-pad.l-pad.r,ih=H-pad.t-pad.b;
+  const maxV=useMemo(()=>{let m=100;keys.forEach(k=>exps.forEach(e=>{const d=stats[k][e];if(d)m=Math.max(m,d.m+d.s);}));return m;},[stats,keys,exps]);
+  const yS=useMemo(()=>d3.scaleLinear().domain([0,maxV*1.12]).range([ih,0]),[maxV,ih]);
+  const xS=useMemo(()=>d3.scaleBand().domain(exps).range([0,iw]).padding(.15),[exps,iw]);
+
+  // Summary table
+  const summary=useMemo(()=>keys.map(k=>{
+    const allVals=exps.flatMap(e=>(groups[k]&&groups[k][e])||[]);
+    const c=iqrClean(allVals);const m=c.length?mn(c):0;const s=c.length>1?stdev(c):0;
+    const expCount=exps.filter(e=>stats[k][e]).length;
+    const expWithData=exps.filter(e=>stats[k][e]);
+    let trend=0;
+    if(expWithData.length>=2){const first=stats[k][expWithData[0]].m;const last=stats[k][expWithData[expWithData.length-1]].m;trend=first>0?(last-first)/first*100:0;}
+    return{k,n:allVals.length,nc:c.length,m,s,cv:m>0?s/m*100:0,exps:expCount,trend};
+  }).sort((a,b)=>b.m-a.m),[keys,exps,groups,stats]);
+
+  return<div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,flexWrap:"wrap",gap:4}}>
+      <div style={sty.pt}><span style={sty.dt(color||"#2563eb")}/> {title}</div>
+      <GS g={gBy} sg={setGBy} s={sgBy} ss={setSgBy} s2={sg2By} ss2={setSg2By}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1.3fr 0.7fr",gap:8}}>
+      <Zoomable width={W} height={H}><svg width={W} height={H} style={{display:"block"}}><g transform={"translate("+pad.l+","+pad.t+")"}>
+        {yS.ticks(5).map(t=><g key={t}><line x1={0} x2={iw} y1={yS(t)} y2={yS(t)} stroke="#e2e8f0"/><text x={-6} y={yS(t)} dy={3} textAnchor="end" fill="#64748b" fontSize={8}>{fmtN(t)}</text></g>)}
+        <text transform={"translate(-42,"+ih/2+") rotate(-90)"} textAnchor="middle" fill="#64748b" fontSize={8.5}>mg/L</text>
+        {/* Connecting lines */}
+        {keys.map(k=>{const pts=exps.filter(e=>stats[k][e]).map(e=>({x:xS(e)+xS.bandwidth()/2,y:yS(stats[k][e].m)}));
+          if(pts.length<2)return null;
+          return<polyline key={"l"+k} points={pts.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke={colors[k]} strokeWidth={1.5} strokeDasharray="4,4" strokeOpacity={.4}/>;
+        })}
+        {/* Points + error bars */}
+        {exps.map(e=>{const bw=xS.bandwidth();const items=keys.filter(k=>stats[k][e]);const sb=bw/Math.max(items.length,1);
+          return<g key={e}>{items.map((k,ki)=>{const d=stats[k][e];const cx=xS(e)+sb*ki+sb/2;const c=colors[k];
+            return<g key={k}>
+              <line x1={cx} x2={cx} y1={yS(d.m+d.s)} y2={yS(Math.max(0,d.m-d.s))} stroke={c} strokeWidth={1.5} strokeOpacity={.4}/>
+              <circle cx={cx} cy={yS(d.m)} r={5} fill={c} stroke="#fff" strokeWidth={1.5}
+                onMouseMove={ev=>setTip({x:ev.clientX,y:ev.clientY,c:e+" — "+k+"\nMean: "+d.m.toFixed(0)+"±"+d.s.toFixed(0)+" mg/L\nn="+d.n})}
+                onMouseLeave={()=>setTip(null)} style={{cursor:"pointer"}}/>
+            </g>})}<text x={xS(e)+bw/2} y={ih+14} textAnchor="middle" fill="#475569" fontSize={8.5}>{e}</text></g>;
+        })}
+      </g></svg></Zoomable>
+      <div style={{overflowY:"auto",maxHeight:H}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:9}}>
+          <thead><tr><th style={sty.th}>Group</th><th style={{...sty.th,textAlign:"right"}}>Exps</th><th style={{...sty.th,textAlign:"right"}}>Mean</th><th style={{...sty.th,textAlign:"right"}}>CV%</th><th style={{...sty.th,textAlign:"right"}}>Trend</th></tr></thead>
+          <tbody>{summary.map(r=><tr key={r.k}>
+            <td style={{...sty.td,display:"flex",alignItems:"center",gap:3}}><span style={sty.dt(colors[r.k])}/><span style={{fontSize:8.5}}>{r.k}</span></td>
+            <td style={sty.tn}>{r.exps}</td>
+            <td style={sty.tn}>{r.m.toFixed(0)}</td>
+            <td style={{...sty.tn,color:r.cv>30?"#dc2626":r.cv>15?"#d97706":"#059669",fontWeight:600}}>{r.cv.toFixed(1)+"%"}</td>
+            <td style={{...sty.tn,color:r.trend>10?"#059669":r.trend<-10?"#dc2626":"#64748b",fontWeight:600}}>{r.trend>0?"+":""}{r.trend.toFixed(0)+"%"}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+    </div>
+    <div style={{display:"flex",flexWrap:"wrap",gap:"3px 10px",paddingLeft:54,marginTop:3}}>
+      {keys.map(k=><span key={k} style={{display:"flex",alignItems:"center",gap:3,fontSize:8.5,color:"#475569"}}><span style={{width:8,height:8,borderRadius:"50%",background:colors[k],flexShrink:0}}/>{k}</span>)}
+    </div>
+  </div>;
+}
+
+// ── Operator comparison ──
+function OperatorComp({data,tipRef}){
+  const[tip,setTip]=tipRef;
+  const ops=useMemo(()=>{const s={};data.forEach(r=>{if(r.op)s[r.op]=1});return Object.keys(s).sort();},[data]);
+  const opComp=useMemo(()=>{
+    const g={};data.forEach(r=>{if(!r.op)return;const c=r.lys+"/"+r.mm+"/"+r.rv+"µL/"+r.tmpl;if(!g[c])g[c]={};if(!g[c][r.op])g[c][r.op]=[];g[c][r.op].push(r.conc);});
+    return Object.entries(g).filter(([,o])=>Object.keys(o).length>=2).map(([c,o])=>{
+      const os={};Object.entries(o).forEach(([op,v])=>{const cl=iqrClean(v);os[op]={m:cl.length?mn(cl):0,s:cl.length>1?stdev(cl):0,n:v.length};});
+      return{c,os};
+    }).sort((a,b)=>a.c.localeCompare(b.c));
+  },[data]);
+
+  if(ops.length<2)return<div style={{...sty.pn,marginTop:8}}><div style={sty.pt}><span style={sty.dt("#db2777")}/>Operator Comparison</div><div style={{color:"#94a3b8",fontSize:10,padding:16,textAlign:"center"}}>Need data from 2+ operators to compare. Try broadening filters.</div></div>;
+
+  return<div style={{...sty.pn,marginTop:8}}>
+    <div style={sty.pt}><span style={sty.dt("#db2777")}/>Operator Comparison — Matched Conditions ({opComp.length} pairs)</div>
+    {opComp.length===0?<div style={{color:"#94a3b8",fontSize:10,padding:16,textAlign:"center"}}>No matched conditions across operators with current filters.</div>:
+    <div style={{overflowX:"auto",maxHeight:280,overflowY:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:9.5}}>
+        <thead><tr>
+          <th style={sty.th}>Condition (Lys/MM/Vol/Tmpl)</th>
+          {ops.map(op=><th key={op} style={{...sty.th,textAlign:"right"}}><span style={{display:"inline-flex",alignItems:"center",gap:3}}><span style={sty.dt(gc(op))}/>{op}</span></th>)}
+          <th style={{...sty.th,textAlign:"right"}}>Spread</th>
+        </tr></thead>
+        <tbody>{opComp.map(row=>{
+          const ms=[];ops.forEach(op=>{if(row.os[op]&&row.os[op].m>0)ms.push(row.os[op].m);});
+          const avg=ms.length?mn(ms):1;const sp=ms.length>1&&avg>0?(Math.max(...ms)-Math.min(...ms))/avg*100:0;
+          return<tr key={row.c} onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+            <td style={{...sty.td,fontSize:9,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={row.c}>{row.c}</td>
+            {ops.map(op=><td key={op} style={sty.tn}>{row.os[op]?row.os[op].m.toFixed(0)+"±"+row.os[op].s.toFixed(0)+" ("+row.os[op].n+")":"—"}</td>)}
+            <td style={{...sty.tn,color:sp>30?"#dc2626":sp>15?"#d97706":"#059669",fontWeight:600}}>{sp.toFixed(1)+"%"}</td>
+          </tr>;
+        })}</tbody>
+      </table>
+    </div>}
+  </div>;
+}
+
+// ── Experiment comparison ──
+function ExpComparison({data,tipRef}){
+  const[tip,setTip]=tipRef;
+  const[cA,scA]=useState("");const[cB,scB]=useState("");
+  const exps=useMemo(()=>{const s={};data.forEach(r=>{s[r.eid]=1});return Object.keys(s).sort();},[data]);
+  const matched=useMemo(()=>{
+    if(!cA||!cB)return[];
+    const gA={},gB={};
+    data.filter(r=>r.eid===cA).forEach(r=>{const k=r.lys+"/"+r.mm+"/"+r.prod+"/"+r.tmpl;if(!gA[k])gA[k]=[];gA[k].push(r.conc);});
+    data.filter(r=>r.eid===cB).forEach(r=>{const k=r.lys+"/"+r.mm+"/"+r.prod+"/"+r.tmpl;if(!gB[k])gB[k]=[];gB[k].push(r.conc);});
+    return Object.keys(gA).filter(k=>gB[k]).map(k=>{
+      const ca=iqrClean(gA[k]),cb=iqrClean(gB[k]);
+      const mA=ca.length?mn(ca):0,mB=cb.length?mn(cb):0;
+      return{c:k,a:{m:mA,s:ca.length>1?stdev(ca):0,n:gA[k].length},b:{m:mB,s:cb.length>1?stdev(cb):0,n:gB[k].length},d:mA>0?(mB-mA)/mA*100:0};
+    }).sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+  },[cA,cB,data]);
+
+  return<div style={{...sty.pn,marginTop:8}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,flexWrap:"wrap",gap:4}}>
+      <div style={sty.pt}><span style={sty.dt("#0891b2")}/>Experiment-to-Experiment Comparison</div>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <span style={{fontSize:8,color:"#64748b",fontWeight:600}}>A:</span>
+        <select style={sty.sl} value={cA} onChange={e=>scA(e.target.value)}><option value="">Select…</option>{exps.map(e=><option key={e} value={e}>{e}</option>)}</select>
+        <span style={{color:"#94a3b8",margin:"0 2px"}}>vs</span>
+        <span style={{fontSize:8,color:"#64748b",fontWeight:600}}>B:</span>
+        <select style={sty.sl} value={cB} onChange={e=>scB(e.target.value)}><option value="">Select…</option>{exps.filter(e=>e!==cA).map(e=><option key={e} value={e}>{e}</option>)}</select>
+      </div>
+    </div>
+    {!cA||!cB?<div style={{color:"#94a3b8",fontSize:10,padding:16,textAlign:"center"}}>Select two experiments above to compare matched conditions.</div>:
+     matched.length===0?<div style={{color:"#d97706",fontSize:10,padding:16,textAlign:"center"}}>No overlapping conditions between {cA} and {cB}.</div>:
+     <div style={{overflowX:"auto",maxHeight:260,overflowY:"auto"}}>
+       <table style={{width:"100%",borderCollapse:"collapse",fontSize:9.5}}>
+         <thead><tr><th style={sty.th}>Condition (Lys/MM/Prod/Tmpl)</th><th style={{...sty.th,textAlign:"right"}}>{cA}</th><th style={{...sty.th,textAlign:"right"}}>{cB}</th><th style={{...sty.th,textAlign:"right"}}>Δ%</th></tr></thead>
+         <tbody>{matched.map(m=><tr key={m.c} onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+           <td style={{...sty.td,fontSize:9}}>{m.c}</td>
+           <td style={sty.tn}>{m.a.m.toFixed(0)+"±"+m.a.s.toFixed(0)+" ("+m.a.n+")"}</td>
+           <td style={sty.tn}>{m.b.m.toFixed(0)+"±"+m.b.s.toFixed(0)+" ("+m.b.n+")"}</td>
+           <td style={{...sty.tn,color:m.d>10?"#059669":m.d<-10?"#dc2626":"#64748b",fontWeight:600}}>{(m.d>0?"+":"")+m.d.toFixed(1)+"%"}</td>
+         </tr>)}</tbody>
+       </table>
+       <div style={{fontSize:9,color:"#64748b",marginTop:4}}>Δ = (B−A)/A × 100%. Sorted by largest absolute change.</div>
+     </div>}
+  </div>;
+}
+
+// ── Main page content (receives filtered data from AppWrap/PageWrap) ──
+function ReproContent({fd, data}){
+  const tipState=useState(null);
+  const[tip]=tipState;
+
+  return<div>
+    {tip&&<Tip x={tip.x} y={tip.y}>{tip.c}</Tip>}
+
+    {/* Lysate tracking */}
+    <div style={sty.pn}>
+      <TrendChart data={fd} defaultGroup="lysate" title="Lysate Performance Across Experiments" color="#dc2626" tipRef={tipState}/>
+    </div>
+
+    {/* Master Mix tracking */}
+    <div style={{...sty.pn,marginTop:8}}>
+      <TrendChart data={fd} defaultGroup="master_mix" title="Master Mix Performance Across Experiments" color="#d97706" tipRef={tipState}/>
+    </div>
+
+    {/* Product tracking */}
+    <div style={{...sty.pn,marginTop:8}}>
+      <TrendChart data={fd} defaultGroup="product" title="Product Type Consistency Across Experiments" color="#059669" tipRef={tipState}/>
+    </div>
+
+    {/* Operator comparison */}
+    <OperatorComp data={fd} tipRef={tipState}/>
+
+    {/* Experiment comparison */}
+    <ExpComparison data={fd} tipRef={tipState}/>
+  </div>;
+}
+
+ReactDOM.render(<AppWrap activePage="repro" renderContent={({fd,data})=><ReproContent fd={fd} data={data}/>}/>,document.getElementById("app"));
+</script>
+<script src="shared/help-widget.js"></script>
+<button class="help-fab" id="helpFab" onclick="toggleHelp()" title="Help">?</button>
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()"></div>
+<div class="help-modal" id="helpModal">
+  <button class="help-close" onclick="toggleHelp()">&times;</button>
+  <div class="help-modal-head"><h2>Reproducibility — Help</h2><p>Assess consistency across experiments, operators, and conditions</p></div>
+  <div class="help-modal-body"><h3>Trend Charts</h3>
+<p>Line/scatter charts showing concentration means across experiments, grouped by a configurable metadata field (Lysate, Product, Template, etc.). Error bars show ± 1 SD. Use the <strong>Group</strong> and <strong>+Sub</strong> dropdowns to customize.</p>
+
+<h3>Operator Comparison</h3>
+<p>Identifies matched conditions — cases where different operators ran the same lysate, master mix, product, template, and reaction volume. Shows side-by-side mean comparisons for each matched pair.</p>
+
+<h3>Experiment-to-Experiment Comparison</h3>
+<p>Paired bar charts comparing mean concentrations across experiments. Helps identify batch effects or systematic shifts over time.</p>
+
+<h3>Interpretation Tips</h3>
+<ul>
+<li><strong>CV% &lt; 15%</strong> — Good reproducibility (green)</li>
+<li><strong>CV% 15–30%</strong> — Moderate variability (amber)</li>
+<li><strong>CV% &gt; 30%</strong> — High variability, investigate (red)</li>
+</ul></div>
+</div>
+<script src="tutorial.js"></script>
+</body></html>

@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Report Upload — JCM-Claude Toolkit</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/help-widget.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F7F7F4;--surface:#FFFFFF;--surface2:#EFEEE9;
+  --text:#141413;--text2:#4A4A45;--text3:#8A8A83;
+  --green:#1B6B4A;--green-light:#E3F2EB;--green-dark:#0F4A32;
+  --blue:#1E40AF;--blue-light:#E8EEFB;--blue-dark:#172554;
+  --red:#B5342E;--red-light:#FDE8E8;--red-dark:#8B1A16;
+  --border:#D8D6CF;
+  --rose:#9F1239;--rose-light:#FCE7F3;--rose-dark:#881337;
+}
+html{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+body{min-height:100vh;display:flex;flex-direction:column}
+
+/* ── TOP BAR ── */
+.topbar{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 2rem;border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.topbar .back{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:.82rem;font-weight:500;color:var(--text2);
+  text-decoration:none;padding:6px 12px;border-radius:8px;
+  transition:all .2s;
+}
+.topbar .back:hover{background:var(--surface2);color:var(--text)}
+.topbar .back svg{flex-shrink:0}
+.topbar h1{font-size:1rem;font-weight:700;letter-spacing:-.02em}
+.topbar .badge{
+  font-size:.65rem;font-weight:600;letter-spacing:.04em;
+  padding:3px 10px;border-radius:20px;
+  background:var(--rose-light);color:var(--rose-dark);
+  font-family:'JetBrains Mono',monospace;
+}
+
+/* ── MAIN ── */
+.main{max-width:800px;width:100%;margin:0 auto;padding:2.5rem 2rem 4rem}
+
+.section-title{
+  font-size:.7rem;font-family:'JetBrains Mono',monospace;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--text3);
+  margin-bottom:1rem;padding-bottom:.5rem;
+  border-bottom:1px solid rgba(0,0,0,.06);
+}
+
+/* ── GITLAB PANEL ── */
+.gl-panel{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:1rem 1.25rem;margin-bottom:2rem;
+}
+.gl-panel summary{
+  font-size:.82rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;
+  color:var(--text2);list-style:none;
+}
+.gl-panel summary::-webkit-details-marker{display:none}
+.gl-panel summary::before{content:'▶';font-size:.55rem;transition:transform .2s;display:inline-block}
+.gl-panel[open] summary::before{transform:rotate(90deg)}
+.gl-panel .gl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:.75rem}
+@media(max-width:600px){.gl-panel .gl-grid{grid-template-columns:1fr}}
+.gl-panel label{font-size:.68rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px}
+.gl-panel input{width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:.78rem;font-family:'JetBrains Mono',monospace;background:var(--surface);color:var(--text)}
+.gl-panel input:focus{outline:none;border-color:var(--rose)}
+.gl-panel .gl-desc{font-size:.75rem;color:var(--text3);margin-top:.5rem;line-height:1.5}
+.gl-tag{display:inline-flex;align-items:center;gap:4px;font-size:.62rem;padding:2px 8px;border-radius:10px;font-weight:600;background:var(--green-light);color:var(--green);font-family:'JetBrains Mono',monospace}
+.gl-tag.disconnected{background:var(--surface2);color:var(--text3)}
+.gl-actions{display:flex;gap:8px;margin-top:.75rem;align-items:center}
+.gl-actions button{
+  padding:6px 14px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text2);
+  font-size:.75rem;font-weight:500;font-family:inherit;
+  cursor:pointer;transition:all .2s;
+}
+.gl-actions button:hover{border-color:var(--rose);color:var(--rose)}
+.gl-status{display:none;font-size:.72rem;margin-top:8px;padding:8px 12px;border-radius:8px;font-family:'JetBrains Mono',monospace}
+.gl-status.show{display:block}
+.gl-status.info{background:var(--blue-light);color:var(--blue)}
+.gl-status.ok{background:var(--green-light);color:var(--green)}
+.gl-status.err{background:var(--red-light);color:var(--red)}
+
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.1);border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── DROP ZONE ── */
+.drop-zone{
+  position:relative;
+  border:2px dashed var(--border);border-radius:16px;
+  padding:3rem 2rem;text-align:center;
+  background:var(--surface);
+  transition:all .25s;cursor:pointer;
+  margin-bottom:2rem;
+}
+.drop-zone.over{
+  border-color:var(--rose);background:var(--rose-light);
+}
+.drop-zone.over .dz-icon{color:var(--rose)}
+
+.dz-icon{
+  width:56px;height:56px;border-radius:14px;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:var(--rose-light);color:var(--rose);
+  margin-bottom:1rem;
+}
+.dz-title{font-size:1.05rem;font-weight:600;margin-bottom:.35rem}
+.dz-sub{font-size:.82rem;color:var(--text2);line-height:1.5}
+.dz-sub strong{
+  color:var(--rose);cursor:pointer;text-decoration:underline;
+  text-underline-offset:2px;
+}
+.dz-hint{
+  margin-top:.75rem;font-size:.72rem;color:var(--text3);
+  font-family:'JetBrains Mono',monospace;
+}
+
+input[type=file]{display:none}
+
+/* ── PENDING LIST ── */
+.pending{margin-bottom:2rem}
+.pending-item{
+  display:flex;align-items:center;gap:12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:12px 16px;margin-bottom:8px;
+  animation:slideIn .25s ease both;
+}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.pending-item .fi{
+  width:36px;height:36px;border-radius:8px;
+  background:var(--rose-light);color:var(--rose);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.pending-item .info{flex:1;min-width:0}
+.pending-item .fname{font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pending-item .fmeta{font-size:.72rem;color:var(--text3);font-family:'JetBrains Mono',monospace}
+.pending-item .remove{
+  width:28px;height:28px;border-radius:50%;border:none;
+  background:var(--surface2);color:var(--text3);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s;flex-shrink:0;
+}
+.pending-item .remove:hover{background:var(--red-light);color:var(--red)}
+
+/* name input */
+.pending-item .name-input{
+  font-family:'DM Sans',system-ui,sans-serif;
+  font-size:.82rem;border:1px solid var(--border);border-radius:6px;
+  padding:4px 8px;width:100%;margin-top:4px;
+  transition:border-color .2s;
+}
+.pending-item .name-input:focus{outline:none;border-color:var(--rose)}
+
+/* ── STORE BTN ── */
+.store-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:12px 28px;border-radius:12px;border:none;
+  background:var(--rose);color:#fff;
+  font-size:.9rem;font-weight:600;font-family:inherit;
+  cursor:pointer;transition:all .25s;
+}
+.store-btn:hover{background:var(--rose-dark);transform:translateY(-1px);box-shadow:0 6px 20px rgba(159,18,57,.25)}
+.store-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.store-btn svg{flex-shrink:0}
+
+/* ── STORED REPORTS LIST ── */
+.stored-section{margin-top:3rem}
+.stored-list{display:flex;flex-direction:column;gap:8px}
+.stored-item{
+  display:flex;align-items:center;gap:12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:12px 16px;transition:all .2s;
+}
+.stored-item:hover{border-color:var(--rose);box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.stored-item .si-icon{
+  width:36px;height:36px;border-radius:8px;
+  background:var(--green-light);color:var(--green);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.stored-item .si-info{flex:1;min-width:0}
+.stored-item .si-name{font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stored-item .si-meta{font-size:.72rem;color:var(--text3);font-family:'JetBrains Mono',monospace}
+.stored-item .si-actions{display:flex;gap:6px;flex-shrink:0}
+.si-btn{
+  width:30px;height:30px;border-radius:8px;border:none;
+  background:var(--surface2);color:var(--text3);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s;
+}
+.si-btn:hover{background:var(--blue-light);color:var(--blue)}
+.si-btn.del:hover{background:var(--red-light);color:var(--red)}
+
+/* source badge */
+.si-source{
+  font-size:.58rem;font-weight:600;letter-spacing:.03em;
+  padding:2px 7px;border-radius:6px;
+  font-family:'JetBrains Mono',monospace;
+  white-space:nowrap;
+}
+.si-source.gl{background:var(--green-light);color:var(--green)}
+.si-source.local{background:var(--surface2);color:var(--text3)}
+
+.empty-state{
+  text-align:center;padding:2.5rem 1rem;
+  color:var(--text3);font-size:.85rem;
+}
+
+/* ── TOAST ── */
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--text);color:#fff;
+  padding:10px 20px;border-radius:10px;
+  font-size:.82rem;font-weight:500;
+  box-shadow:0 8px 30px rgba(0,0,0,.2);
+  transition:transform .3s cubic-bezier(.22,1,.36,1);
+  z-index:9999;pointer-events:none;
+}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back" href="index.html">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2L4 8l6 6"/></svg>
+    Home
+  </a>
+  <h1>Report Upload</h1>
+  <span class="badge">HTML reports</span>
+</div>
+
+<div class="main">
+
+  <!-- GITLAB SETTINGS -->
+  <details class="gl-panel" id="glPanel">
+    <summary>
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      GitLab sync
+      <span class="gl-tag disconnected" id="glTag">not configured</span>
+    </summary>
+    <p class="gl-desc">Connect to your GitLab repo so uploaded reports are committed to <code>data/reports/</code>. Anyone with repo access can view them.</p>
+    <div class="gl-grid">
+      <div><label>Repository</label><input id="glProject" placeholder="e.g. owner/repo-name"></div>
+      <div><label>Branch</label><input id="glBranch" value="main" placeholder="main"></div>
+      <div><label>Personal access token</label><input id="glToken" type="password" placeholder="ghp_…"></div>
+      <div style="display:flex;align-items:flex-end">
+        <div class="gl-actions">
+          <button onclick="clearGLSettings()">Clear</button>
+          <button id="toggleTok" onclick="toggleTokenVis()">Show</button>
+          <button onclick="pullFromGitLab()">Pull</button>
+        </div>
+      </div>
+    </div>
+    <div class="gl-status" id="glStatus"></div>
+  </details>
+
+  <!-- DROP ZONE -->
+  <div class="section-title">Upload HTML reports</div>
+  <div class="drop-zone" id="dropZone">
+    <div class="dz-icon">
+      <svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M4 18v2a2 2 0 002 2h14a2 2 0 002-2v-2"/>
+        <path d="M13 3v12m0 0l-4-4m4 4l4-4"/>
+      </svg>
+    </div>
+    <div class="dz-title">Drop HTML files here</div>
+    <div class="dz-sub">or <strong id="browseBtn">browse files</strong></div>
+    <div class="dz-hint">.html only · stored in repo via GitLab + local IndexedDB</div>
+    <input type="file" id="fileInput" accept=".html,.htm" multiple>
+  </div>
+
+  <!-- PENDING FILES -->
+  <div class="pending" id="pendingList"></div>
+
+  <button class="store-btn" id="storeBtn" disabled>
+    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M5 12l5 5 5-5"/>
+      <path d="M10 3v14"/>
+    </svg>
+    Store reports
+  </button>
+
+  <!-- STORED REPORTS -->
+  <div class="stored-section">
+    <div class="section-title">Stored reports</div>
+    <div class="stored-list" id="storedList"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="shared/help-widget.js"></script>
+<button class="help-fab" id="helpFab" onclick="toggleHelp()" title="Help">?</button>
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()"></div>
+<div class="help-modal" id="helpModal">
+  <button class="help-close" onclick="toggleHelp()">&times;</button>
+  <div class="help-modal-head"><h2>Report Upload — Help</h2><p>Store HTML reports for viewing in the Report Viewer</p></div>
+  <div class="help-modal-body">
+    <h3>What this does</h3>
+    <p>Upload self-contained HTML report files (like those generated by Claude, Jupyter, R Markdown, etc.) and store them in the GitLab repo under <code>data/reports/</code>. When GitLab is configured, reports are committed to the repo so <strong>anyone with access can see them</strong>. Reports are also cached locally in IndexedDB.</p>
+    <h3>How to use</h3>
+    <ul>
+      <li>Configure <strong>GitLab sync</strong> (same credentials as Lot Browser / Raw Editor) so reports are shared.</li>
+      <li>Drag &amp; drop <code>.html</code> files onto the upload zone, or click "browse files" to select them.</li>
+      <li>Give each report a display name (auto-filled from filename).</li>
+      <li>Click <strong>Store reports</strong> to save them to GitLab and to the local browser cache.</li>
+      <li>Use <strong>Pull</strong> in the GitLab panel to refresh the list from the repo.</li>
+    </ul>
+    <h3>Viewing reports</h3>
+    <p>Once stored, use the <strong>Report Viewer</strong> tool to select and view any report in a sandboxed iframe. Reports from GitLab are visible to all users.</p>
+    <h3>Storage</h3>
+    <p><strong>GitLab (shared):</strong> HTML files are committed to <code>data/reports/</code> with an <code>_index.json</code> manifest. Anyone with repo access can see them.</p>
+    <p><strong>IndexedDB (local fallback):</strong> Reports are also cached in the browser. If GitLab is not configured, reports are stored locally only.</p>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  IndexedDB helpers (local cache — kept for offline / fallback)
+// ═══════════════════════════════════════════════════════════
+const DB_NAME = 'jcm_reports';
+const DB_VERSION = 1;
+const STORE_NAME = 'reports';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        store.createIndex('name', 'name', { unique: false });
+        store.createIndex('date', 'date', { unique: false });
+      }
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+async function getAllReports() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function storeReport(report) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.put(report);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function deleteReport(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GITLAB SETTINGS (shared key with lot_browser / lot_raw_editor)
+// ═══════════════════════════════════════════════════════════
+function loadGLSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('lot_gl_settings') || '{}');
+    if (s.project) document.getElementById('glProject').value = s.project;
+    if (s.branch) document.getElementById('glBranch').value = s.branch;
+    if (s.token) document.getElementById('glToken').value = s.token;
+    updateGLTag();
+  } catch (e) {}
+}
+function saveGLSettings() {
+  const s = {
+    project: document.getElementById('glProject').value.trim(),
+    branch: document.getElementById('glBranch').value.trim() || 'main',
+    token: document.getElementById('glToken').value.trim()
+  };
+  try { localStorage.setItem('lot_gl_settings', JSON.stringify(s)); } catch (e) {}
+  updateGLTag();
+  return s;
+}
+function clearGLSettings() {
+  try { localStorage.removeItem('lot_gl_settings'); } catch (e) {}
+  document.getElementById('glProject').value = '';
+  document.getElementById('glBranch').value = 'main';
+  document.getElementById('glToken').value = '';
+  updateGLTag();
+}
+function updateGLTag() {
+  const tag = document.getElementById('glTag');
+  const proj = document.getElementById('glProject').value.trim();
+  const tok = document.getElementById('glToken').value.trim();
+  if (proj && tok) {
+    tag.textContent = 'connected';
+    tag.className = 'gl-tag';
+  } else {
+    tag.textContent = 'not configured';
+    tag.className = 'gl-tag disconnected';
+  }
+}
+function toggleTokenVis() {
+  const inp = document.getElementById('glToken');
+  const btn = document.getElementById('toggleTok');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = 'Hide'; }
+  else { inp.type = 'password'; btn.textContent = 'Show'; }
+}
+['glProject', 'glToken'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => { saveGLSettings(); });
+});
+document.getElementById('glBranch').addEventListener('change', () => { saveGLSettings(); });
+
+function getGL() {
+  return saveGLSettings();
+}
+function isGLConfigured() {
+  const gl = getGL();
+  return !!(gl.project && gl.token);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GITLAB HELPERS — data/reports/ files + _index.json
+// ═══════════════════════════════════════════════════════════
+const REPORTS_DIR = 'data/reports';
+const INDEX_FILE = REPORTS_DIR + '/_index.json';
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// Sanitize a report name into a safe filename
+function sanitizeFilename(name) {
+  return name.trim()
+    .replace(/[^a-zA-Z0-9_\-. ]/g, '')
+    .replace(/\s+/g, '_')
+    .substring(0, 120) || 'report';
+}
+
+// Fetch a file from GitHub (raw content)
+async function glFetchFile(gl, filePath) {
+  const resp = await fetch(
+    'https://api.github.com/repos/' + gl.project + '/contents/' +
+    encodeURIComponent(filePath) + '?ref=' + encodeURIComponent(gl.branch),
+    { headers: { 'Authorization': 'Bearer ' + gl.token, 'Accept': 'application/vnd.github.v3+json' } }
+  );
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const data = await resp.json();
+  return atob(data.content.replace(/\n/g, ''));
+}
+
+// Fetch the index from GitHub
+async function glFetchIndex(gl) {
+  try {
+    const text = await glFetchFile(gl, INDEX_FILE);
+    return JSON.parse(text);
+  } catch (e) {
+    // Index doesn't exist yet — return empty
+    return [];
+  }
+}
+
+// Commit multiple files (push each file individually via GitHub Contents API)
+async function glCommitFiles(gl, actions, message) {
+  let lastResp = null;
+  for (const action of actions) {
+    // Get existing file SHA if updating or deleting
+    let fileSha = null;
+    if (action.action === 'update' || action.action === 'delete') {
+      try {
+        const getResp = await fetch(
+          'https://api.github.com/repos/' + gl.project + '/contents/' +
+          encodeURIComponent(action.file_path) + '?ref=' + encodeURIComponent(gl.branch),
+          { headers: { 'Authorization': 'Bearer ' + gl.token, 'Accept': 'application/vnd.github.v3+json' } }
+        );
+        if (getResp.ok) { const gd = await getResp.json(); fileSha = gd.sha; }
+      } catch (e) {}
+    }
+
+    if (action.action === 'delete') {
+      const payload = { message: message, sha: fileSha, branch: gl.branch };
+      const resp = await fetch(
+        'https://api.github.com/repos/' + gl.project + '/contents/' + encodeURIComponent(action.file_path),
+        { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + gl.token, 'Accept': 'application/vnd.github.v3+json' }, body: JSON.stringify(payload) }
+      );
+      if (!resp.ok) { const ed = await resp.json().catch(() => ({})); throw new Error(ed.message || resp.statusText); }
+      lastResp = await resp.json();
+    } else {
+      const payload = { message: message, content: btoa(unescape(encodeURIComponent(action.content))), branch: gl.branch };
+      if (fileSha) payload.sha = fileSha;
+      const resp = await fetch(
+        'https://api.github.com/repos/' + gl.project + '/contents/' + encodeURIComponent(action.file_path),
+        { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + gl.token, 'Accept': 'application/vnd.github.v3+json' }, body: JSON.stringify(payload) }
+      );
+      if (!resp.ok) { const ed = await resp.json().catch(() => ({})); throw new Error(ed.message || resp.statusText); }
+      lastResp = await resp.json();
+    }
+  }
+  // Return a structure compatible with the callers
+  const sha = lastResp && lastResp.commit && lastResp.commit.sha ? lastResp.commit.sha : '';
+  return { id: sha };
+}
+
+// Check if a file exists in GitHub
+async function glFileExists(gl, filePath) {
+  try {
+    const resp = await fetch(
+      'https://api.github.com/repos/' + gl.project + '/contents/' +
+      encodeURIComponent(filePath) + '?ref=' + encodeURIComponent(gl.branch),
+      { method: 'HEAD', headers: { 'Authorization': 'Bearer ' + gl.token, 'Accept': 'application/vnd.github.v3+json' } }
+    );
+    return resp.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PULL FROM GITLAB — refresh stored list from repo
+// ═══════════════════════════════════════════════════════════
+async function pullFromGitLab() {
+  const gl = getGL();
+  if (!gl.project || !gl.token) {
+    showToast('Configure GitLab settings first');
+    document.getElementById('glPanel').open = true;
+    return;
+  }
+
+  const status = document.getElementById('glStatus');
+  status.className = 'gl-status show info';
+  status.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:1.5px;vertical-align:middle;margin-right:6px"></span>Pulling report index from GitLab…';
+
+  try {
+    const index = await glFetchIndex(gl);
+    // Sync each report into IndexedDB (cache HTML locally)
+    let synced = 0;
+    for (const entry of index) {
+      try {
+        const html = await glFetchFile(gl, REPORTS_DIR + '/' + entry.filename);
+        await storeReport({
+          id: entry.id,
+          name: entry.name,
+          filename: entry.filename,
+          size: html.length,
+          html: html,
+          date: entry.date,
+          source: 'gitlab'
+        });
+        synced++;
+      } catch (e) {
+        console.warn('Failed to pull report:', entry.filename, e);
+      }
+    }
+    status.className = 'gl-status show ok';
+    status.innerHTML = '<strong>Pulled ' + synced + ' report' + (synced !== 1 ? 's' : '') + '</strong> from GitLab';
+    showToast(synced + ' report' + (synced !== 1 ? 's' : '') + ' synced');
+    setTimeout(() => { status.className = 'gl-status'; }, 6000);
+    loadStored();
+  } catch (err) {
+    status.className = 'gl-status show err';
+    status.innerHTML = '<strong>Pull failed</strong>: ' + esc(err.message);
+    showToast('Pull failed');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  State
+// ═══════════════════════════════════════════════════════════
+let pendingFiles = []; // {id, name, file, sizeStr}
+
+// ── DOM ──
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const browseBtn = document.getElementById('browseBtn');
+const pendingList = document.getElementById('pendingList');
+const storeBtn = document.getElementById('storeBtn');
+const storedList = document.getElementById('storedList');
+const toast = document.getElementById('toast');
+
+// ── Drag & drop ──
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('over');
+  handleFiles(e.dataTransfer.files);
+});
+dropZone.addEventListener('click', () => fileInput.click());
+browseBtn.addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
+fileInput.addEventListener('change', () => { handleFiles(fileInput.files); fileInput.value = ''; });
+
+function handleFiles(fileList) {
+  for (const f of fileList) {
+    if (!f.name.match(/\.html?$/i)) continue;
+    const id = crypto.randomUUID();
+    const nameBase = f.name.replace(/\.html?$/i, '').replace(/[_-]/g, ' ');
+    const sizeStr = f.size < 1024 ? f.size + ' B'
+                  : f.size < 1048576 ? (f.size / 1024).toFixed(1) + ' KB'
+                  : (f.size / 1048576).toFixed(2) + ' MB';
+    pendingFiles.push({ id, name: nameBase, file: f, sizeStr });
+  }
+  renderPending();
+}
+
+function renderPending() {
+  pendingList.innerHTML = '';
+  pendingFiles.forEach((p, i) => {
+    const el = document.createElement('div');
+    el.className = 'pending-item';
+    el.style.animationDelay = (i * 50) + 'ms';
+    el.innerHTML = `
+      <div class="fi">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h8l4 4v8a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/><path d="M12 4v4h4"/></svg>
+      </div>
+      <div class="info">
+        <input class="name-input" value="${p.name}" data-id="${p.id}" placeholder="Report name">
+        <div class="fmeta">${p.file.name} · ${p.sizeStr}</div>
+      </div>
+      <button class="remove" data-id="${p.id}" title="Remove">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l8 8m0-8l-8 8"/></svg>
+      </button>
+    `;
+    pendingList.appendChild(el);
+  });
+
+  // bind name inputs
+  pendingList.querySelectorAll('.name-input').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const pf = pendingFiles.find(p => p.id === e.target.dataset.id);
+      if (pf) pf.name = e.target.value;
+    });
+  });
+
+  // bind remove buttons
+  pendingList.querySelectorAll('.remove').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const id = e.currentTarget.dataset.id;
+      pendingFiles = pendingFiles.filter(p => p.id !== id);
+      renderPending();
+    });
+  });
+
+  storeBtn.disabled = pendingFiles.length === 0;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  STORE — save to IndexedDB + push to GitLab
+// ═══════════════════════════════════════════════════════════
+storeBtn.addEventListener('click', async () => {
+  if (pendingFiles.length === 0) return;
+  storeBtn.disabled = true;
+
+  const gl = getGL();
+  const useGL = !!(gl.project && gl.token);
+  const status = document.getElementById('glStatus');
+
+  // Read all files first
+  const toStore = [];
+  for (const p of pendingFiles) {
+    try {
+      const html = await p.file.text();
+      const safeName = sanitizeFilename(p.name || p.file.name.replace(/\.html?$/i, ''));
+      const filename = safeName + '.html';
+      toStore.push({
+        id: p.id,
+        name: p.name || p.file.name,
+        filename: filename,
+        size: p.file.size,
+        html: html,
+        date: new Date().toISOString(),
+        source: useGL ? 'gitlab' : 'local'
+      });
+    } catch (err) {
+      console.error('Failed to read', p.file.name, err);
+    }
+  }
+
+  // Store locally in IndexedDB
+  let stored = 0;
+  for (const r of toStore) {
+    try {
+      await storeReport(r);
+      stored++;
+    } catch (err) {
+      console.error('Failed to store locally', r.filename, err);
+    }
+  }
+
+  // Push to GitLab if configured
+  if (useGL && toStore.length > 0) {
+    status.className = 'gl-status show info';
+    status.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:1.5px;vertical-align:middle;margin-right:6px"></span>Pushing ' + toStore.length + ' report' + (toStore.length > 1 ? 's' : '') + ' to GitLab…';
+
+    try {
+      // Fetch current index
+      let index = await glFetchIndex(gl);
+
+      // Deduplicate filenames — if a file with the same filename exists, suffix with _2, _3, etc.
+      const existingFilenames = new Set(index.map(e => e.filename));
+      for (const r of toStore) {
+        let fn = r.filename;
+        let base = fn.replace(/\.html$/i, '');
+        let counter = 2;
+        while (existingFilenames.has(fn)) {
+          fn = base + '_' + counter + '.html';
+          counter++;
+        }
+        r.filename = fn;
+        existingFilenames.add(fn);
+      }
+
+      // Build commit actions: each HTML file + updated index
+      const actions = [];
+
+      for (const r of toStore) {
+        const exists = await glFileExists(gl, REPORTS_DIR + '/' + r.filename);
+        actions.push({
+          action: exists ? 'update' : 'create',
+          file_path: REPORTS_DIR + '/' + r.filename,
+          content: r.html
+        });
+        // Add to index
+        index.push({
+          id: r.id,
+          name: r.name,
+          filename: r.filename,
+          size: r.size,
+          date: r.date
+        });
+      }
+
+      // Update the _index.json
+      const indexExists = await glFileExists(gl, INDEX_FILE);
+      actions.push({
+        action: indexExists ? 'update' : 'create',
+        file_path: INDEX_FILE,
+        content: JSON.stringify(index, null, 2) + '\n'
+      });
+
+      const commitMsg = '[Report Upload] Add ' + toStore.length + ' report' + (toStore.length > 1 ? 's' : '') +
+        ': ' + toStore.map(r => r.filename).join(', ');
+
+      const data = await glCommitFiles(gl, actions, commitMsg);
+      const sha = data.id ? data.id.substring(0, 8) : '';
+
+      status.className = 'gl-status show ok';
+      status.innerHTML = '<strong>Committed</strong> — ' + toStore.length + ' report' + (toStore.length > 1 ? 's' : '') +
+        ' → <code>' + esc(gl.branch) + '</code>' + (sha ? ' · <code>' + sha + '</code>' : '');
+      setTimeout(() => { status.className = 'gl-status'; }, 8000);
+
+    } catch (err) {
+      status.className = 'gl-status show err';
+      status.innerHTML = '<strong>GitLab push failed</strong>: ' + esc(err.message) + '<br>Reports saved locally only.';
+      console.error('GitLab push failed:', err);
+    }
+  }
+
+  pendingFiles = [];
+  renderPending();
+  showToast(stored + ' report' + (stored !== 1 ? 's' : '') + ' stored' + (useGL ? ' & pushed to GitLab' : ''));
+  loadStored();
+});
+
+// ═══════════════════════════════════════════════════════════
+//  DELETE — remove from IndexedDB + optionally from GitLab
+// ═══════════════════════════════════════════════════════════
+async function deleteReportFull(id) {
+  // Find report info before deleting locally
+  let report = null;
+  try {
+    const all = await getAllReports();
+    report = all.find(r => r.id === id);
+  } catch (e) {}
+
+  // Delete from IndexedDB
+  await deleteReport(id);
+
+  // Delete from GitLab if configured and report came from there
+  const gl = getGL();
+  if (gl.project && gl.token && report && report.source === 'gitlab' && report.filename) {
+    const status = document.getElementById('glStatus');
+    status.className = 'gl-status show info';
+    status.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:1.5px;vertical-align:middle;margin-right:6px"></span>Removing from GitLab…';
+
+    try {
+      // Fetch current index, remove entry
+      let index = await glFetchIndex(gl);
+      index = index.filter(e => e.id !== id);
+
+      const actions = [
+        {
+          action: 'delete',
+          file_path: REPORTS_DIR + '/' + report.filename
+        },
+        {
+          action: 'update',
+          file_path: INDEX_FILE,
+          content: JSON.stringify(index, null, 2) + '\n'
+        }
+      ];
+
+      await glCommitFiles(gl, actions, '[Report Upload] Delete report: ' + report.filename);
+      status.className = 'gl-status show ok';
+      status.innerHTML = '<strong>Deleted</strong> from GitLab: ' + esc(report.filename);
+      setTimeout(() => { status.className = 'gl-status'; }, 6000);
+
+    } catch (err) {
+      status.className = 'gl-status show err';
+      status.innerHTML = '<strong>GitLab delete failed</strong>: ' + esc(err.message) + '<br>Removed locally only.';
+      console.error('GitLab delete failed:', err);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  LOAD STORED REPORTS LIST
+// ═══════════════════════════════════════════════════════════
+async function loadStored() {
+  try {
+    const reports = await getAllReports();
+    reports.sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (reports.length === 0) {
+      storedList.innerHTML = '<div class="empty-state">No reports stored yet. Upload HTML files above.</div>';
+      return;
+    }
+    storedList.innerHTML = '';
+    reports.forEach(r => {
+      const sizeStr = r.size < 1024 ? r.size + ' B'
+                    : r.size < 1048576 ? (r.size / 1024).toFixed(1) + ' KB'
+                    : (r.size / 1048576).toFixed(2) + ' MB';
+      const dateStr = new Date(r.date).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      const srcClass = r.source === 'gitlab' ? 'gl' : 'local';
+      const srcLabel = r.source === 'gitlab' ? 'REPO' : 'LOCAL';
+      const el = document.createElement('div');
+      el.className = 'stored-item';
+      el.innerHTML = `
+        <div class="si-icon">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 2l7 4v8l-7 4-7-4V6l7-4z"/><path d="M9 10v8m0-8l7-4m-7 4L2 6"/></svg>
+        </div>
+        <div class="si-info">
+          <div class="si-name">${esc(r.name)}</div>
+          <div class="si-meta">${esc(r.filename)} · ${sizeStr} · ${dateStr}</div>
+        </div>
+        <span class="si-source ${srcClass}">${srcLabel}</span>
+        <div class="si-actions">
+          <button class="si-btn view-btn" data-id="${r.id}" title="View in Report Viewer">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="4"/><path d="M1 7s3-5 6-5 6 5 6 5-3 5-6 5-6-5-6-5z"/></svg>
+          </button>
+          <button class="si-btn del" data-id="${r.id}" title="Delete">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4h8m-7 0v7a1 1 0 001 1h4a1 1 0 001-1V4M5 4V3a1 1 0 011-1h2a1 1 0 011 1v1"/></svg>
+          </button>
+        </div>
+      `;
+      storedList.appendChild(el);
+    });
+
+    // bind view
+    storedList.querySelectorAll('.view-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        window.location.href = 'report_viewer.html?id=' + btn.dataset.id;
+      });
+    });
+
+    // bind delete
+    storedList.querySelectorAll('.del').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this report?' + (isGLConfigured() ? ' This will also remove it from the GitLab repo.' : ''))) return;
+        await deleteReportFull(btn.dataset.id);
+        showToast('Report deleted');
+        loadStored();
+      });
+    });
+  } catch (err) {
+    console.error('Failed to load stored reports:', err);
+    storedList.innerHTML = '<div class="empty-state">Error loading reports.</div>';
+  }
+}
+
+// ── Toast ──
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2200);
+}
+
+// Init
+loadGLSettings();
+loadStored();
+</script>
+</body>
+</html>

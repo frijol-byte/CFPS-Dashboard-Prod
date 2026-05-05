@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gantt Chart Studio — JCM-Claude Toolkit</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/help-widget.css">
+<style>
+:root {
+    --bg: #FAFAF8;
+    --surface: #ffffff;
+    --toolbar-from: #78350F;
+    --toolbar-to: #92400E;
+    --primary: #92400E;
+    --primary-hover: #78350F;
+    --text: #1A1A18;
+    --text-sec: #5C5B56;
+    --border: #DDD9D1;
+    --border-light: #F3F2EE;
+    --row-h: 42px;
+    --header-h: 54px;
+    --day-w: 36px;
+    --table-w: 820px;
+    --radius: 8px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.08);
+    --shadow-md: 0 4px 12px rgba(0,0,0,.1);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,.12);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.4}
+button{font-family:inherit;cursor:pointer;border:none;outline:none;font-size:13px}
+input,select{font-family:inherit;font-size:12px;outline:none}
+
+.toolbar{background:linear-gradient(135deg,var(--toolbar-from),var(--toolbar-to));color:#fff;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow-md);position:relative;z-index:50}
+.toolbar h1{font-size:18px;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:10px}
+.toolbar h1 svg{opacity:.85}
+.toolbar-actions{display:flex;align-items:center;gap:8px}
+.tb-btn{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.15);padding:7px 14px;border-radius:6px;font-weight:500;display:flex;align-items:center;gap:6px;transition:all .15s}
+.tb-btn:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.3)}
+.tb-btn.primary{background:var(--primary);border-color:var(--primary)}
+.tb-btn.primary:hover{background:var(--primary-hover)}
+.tb-btn.danger{background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.3)}
+.tb-btn.danger:hover{background:rgba(239,68,68,.4)}
+.tb-divider{width:1px;height:28px;background:rgba(255,255,255,.15);margin:0 4px}
+.zoom-group{display:flex;align-items:center;gap:2px;background:rgba(255,255,255,.08);border-radius:6px;padding:2px}
+.zoom-btn{background:transparent;color:#fff;width:30px;height:30px;border-radius:4px;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.zoom-btn:hover{background:rgba(255,255,255,.15)}
+.zoom-label{color:rgba(255,255,255,.7);font-size:11px;padding:0 6px;min-width:36px;text-align:center}
+
+.legend-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:16px;height:36px;flex-shrink:0}
+.legend-bar span.legend-title{font-size:11px;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.5px}
+.color-by-select{border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:11px;background:#fff;color:var(--text);cursor:pointer;font-family:inherit}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-sec)}
+.legend-dot{width:10px;height:10px;border-radius:3px}
+.legend-sep{width:1px;height:16px;background:var(--border);margin:0 2px}
+.status-legend{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-sec)}
+.status-legend .dot{width:8px;height:8px;border-radius:50%}
+
+.main{display:flex;height:calc(100vh - 92px);overflow:hidden;position:relative}
+
+.table-panel{width:var(--table-w);min-width:400px;flex-shrink:0;display:flex;flex-direction:column;background:var(--surface);border-right:2px solid var(--border);position:relative;z-index:10}
+.table-header-row{display:flex;height:var(--header-h);background:#F3F2EE;border-bottom:2px solid var(--border);flex-shrink:0}
+.table-header-row .th{padding:0 8px;display:flex;align-items:center;font-weight:600;font-size:11px;color:var(--text-sec);text-transform:uppercase;letter-spacing:.4px;border-right:1px solid var(--border);white-space:nowrap;overflow:hidden;cursor:default;user-select:none;position:relative;gap:4px}
+.th.filterable{cursor:context-menu}
+.th.filtered{background:rgba(146,64,14,.08);color:var(--primary)}
+.th .filter-icon{display:none;margin-left:auto;opacity:.6;flex-shrink:0}
+.th.filtered .filter-icon{display:block}
+.table-body{flex:1;overflow-y:auto;overflow-x:hidden}
+.table-body::-webkit-scrollbar{width:6px}
+.table-body::-webkit-scrollbar-track{background:transparent}
+.table-body::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+.table-row{display:flex;height:var(--row-h);border-bottom:1px solid var(--border-light);transition:background .1s}
+.table-row:nth-child(even){background:#fafbfc}
+.table-row:hover{background:#FEF3C7}
+.table-row .td{padding:0 6px;display:flex;align-items:center;border-right:1px solid var(--border-light);overflow:hidden;position:relative}
+.table-row .td input,.table-row .td select{width:100%;border:1px solid transparent;border-radius:4px;padding:4px 6px;background:transparent;color:var(--text);transition:all .15s}
+.table-row .td input:hover,.table-row .td select:hover{background:#f1f5f9}
+.table-row .td input:focus,.table-row .td select:focus{border-color:var(--primary);background:#fff;box-shadow:0 0 0 2px rgba(146,64,14,.15)}
+.table-row .td select{cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center;padding-right:20px}
+.td-id{width:36px;justify-content:center;font-weight:600;color:var(--text-sec);font-size:11px;gap:3px}
+.row-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.td-activity{width:160px}.td-desc{width:200px}.td-desc input{text-overflow:ellipsis}
+.td-date{width:100px}.td-date input[type=date]{font-size:11px;padding:3px 4px}
+.td-product{width:90px}.td-assignee{width:120px}.td-status{width:100px}
+.td-actions{width:38px;justify-content:center;border-right:none!important}
+.del-btn{background:transparent;color:#94a3b8;width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.del-btn:hover{background:#fee2e2;color:#ef4444}
+
+.ghost-row{background:#fafcff!important;opacity:.55;transition:opacity .15s}
+.ghost-row:hover{opacity:.85}
+.ghost-row .td input::placeholder{color:#b0bac6;font-style:italic}
+.ghost-row .td-id{color:#c8d0da}
+
+.td.cell-selected{background:rgba(146,64,14,.07)!important}
+.td.cell-selected::after{content:'';position:absolute;inset:0;border:2px solid var(--primary);pointer-events:none;border-radius:2px}
+
+.resize-handle{width:5px;cursor:col-resize;background:transparent;position:absolute;right:-3px;top:0;bottom:0;z-index:20;transition:background .2s}
+.resize-handle:hover,.resize-handle.active{background:var(--primary)}
+
+.chart-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.chart-header{height:var(--header-h);background:#F3F2EE;border-bottom:2px solid var(--border);overflow:hidden;flex-shrink:0;position:relative}
+.chart-header-inner{position:relative;height:100%}
+.month-row{position:absolute;top:0;left:0;height:26px;display:flex}
+.month-cell{height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--text-sec);border-bottom:1px solid var(--border);border-right:1px solid var(--border)}
+.day-row{position:absolute;top:26px;left:0;height:28px;display:flex}
+.day-cell{height:28px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-sec);border-right:1px solid var(--border-light);font-weight:500}
+.day-cell.weekend{background:#f8f9fb;color:#cbd5e1}
+.day-cell.today{background:#FEF3C7;color:var(--primary);font-weight:700}
+.chart-body{flex:1;overflow:auto;position:relative}
+.chart-body::-webkit-scrollbar{width:6px;height:6px}
+.chart-body::-webkit-scrollbar-track{background:transparent}
+.chart-body::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+.chart-canvas{position:relative;min-height:100%}
+.grid-col{position:absolute;top:0;border-right:1px solid #f0f0f3}
+.grid-col.weekend{background:rgba(241,245,249,.5)}
+.grid-row{position:absolute;left:0;right:0;height:var(--row-h);border-bottom:1px solid var(--border-light)}
+.grid-row:nth-child(even){background:rgba(250,251,252,.6)}
+.today-line{position:absolute;top:0;width:2px;background:var(--primary);z-index:5;opacity:.5}
+.today-line::before{content:'Today';position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+
+.bar{position:absolute;height:26px;border-radius:5px;cursor:pointer;display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:500;color:#fff;overflow:visible;transition:filter .15s,transform .15s;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,.15);animation:barSlide .4s ease-out both;transform-origin:left center}
+@keyframes barSlide{from{transform:scaleX(0);opacity:0}to{transform:scaleX(1);opacity:1}}
+.bar:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.2);z-index:4}
+.bar.complete{opacity:.7}.bar.complete::after{content:'✓';margin-left:6px;font-size:12px;font-weight:700}
+.bar.not-started{opacity:.45}
+.bar .bar-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.3);flex:1;min-width:0}
+
+#globalTooltip{display:none;position:fixed;background:#1e293b;color:#fff;padding:10px 14px;border-radius:8px;font-size:11px;line-height:1.6;white-space:nowrap;z-index:9999;box-shadow:var(--shadow-lg);pointer-events:none;max-width:420px}
+#globalTooltip.visible{display:block}
+#globalTooltip .tt-arrow{position:absolute;width:12px;height:6px;overflow:hidden}
+#globalTooltip .tt-arrow::after{content:'';position:absolute;width:10px;height:10px;background:#1e293b;transform:rotate(45deg)}
+#globalTooltip.above .tt-arrow{top:100%;left:50%;transform:translateX(-50%)}
+#globalTooltip.above .tt-arrow::after{top:-6px;left:1px}
+#globalTooltip.below .tt-arrow{bottom:100%;left:50%;transform:translateX(-50%)}
+#globalTooltip.below .tt-arrow::after{bottom:-6px;left:1px}
+.tt-title{font-weight:600;font-size:12px;margin-bottom:4px}
+.tt-row{display:flex;gap:8px;color:rgba(255,255,255,.8)}
+.tt-label{color:rgba(255,255,255,.5);min-width:60px}
+
+.dep-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2}
+
+#ctxMenu{display:none;position:fixed;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-lg);z-index:10000;min-width:220px;max-height:340px;overflow:hidden;flex-direction:column}
+#ctxMenu.visible{display:flex}
+.ctx-header{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+.ctx-title{font-weight:600;font-size:12px;flex:1;color:var(--text)}
+.ctx-btn{font-size:10px;padding:2px 8px;border-radius:4px;background:var(--border-light);color:var(--text-sec);font-family:inherit;transition:background .1s}
+.ctx-btn:hover{background:var(--border)}
+.ctx-list{padding:4px 0;overflow-y:auto;flex:1}
+.ctx-item{padding:5px 12px;display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;transition:background .1s;color:var(--text)}
+.ctx-item:hover{background:var(--border-light)}
+.ctx-item input[type=checkbox]{accent-color:var(--primary);cursor:pointer}
+
+.empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,.85);z-index:5;backdrop-filter:blur(4px);gap:16px}
+.empty-state.hidden{display:none}
+.empty-icon{width:80px;height:80px;background:#f1f5f9;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.empty-icon svg{color:#94a3b8}
+.empty-state h2{font-size:18px;font-weight:600;color:var(--text)}
+.empty-state p{color:var(--text-sec);font-size:13px;text-align:center;max-width:360px;line-height:1.6}
+.empty-actions{display:flex;gap:10px;margin-top:4px}
+.empty-btn{padding:10px 20px;border-radius:8px;font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px;transition:all .15s}
+.empty-btn.primary{background:var(--primary);color:#fff}
+.empty-btn.primary:hover{background:var(--primary-hover)}
+.empty-btn.secondary{background:#f1f5f9;color:var(--text);border:1px solid var(--border)}
+.empty-btn.secondary:hover{background:#e2e8f0}
+
+.col-id{width:36px;min-width:36px}.col-activity{width:160px;min-width:100px}.col-desc{width:200px;min-width:100px}
+.col-start{width:100px;min-width:90px}.col-end{width:100px;min-width:90px}.col-product{width:90px;min-width:80px}
+.col-assignee{width:120px;min-width:80px}.col-pred{width:60px;min-width:50px}.col-status{width:100px;min-width:80px}.col-actions{width:38px;min-width:38px}
+
+.tb-btn.help{background:rgba(27,107,74,.25);border-color:rgba(27,107,74,.5);color:#a0dbb8}
+.tb-btn.help:hover{background:rgba(27,107,74,.45);border-color:rgba(27,107,74,.7)}
+
+.home-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 14px;border-radius:6px;
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+  color:rgba(255,255,255,.85);font-size:.78rem;font-weight:500;
+  text-decoration:none;font-family:inherit;
+  transition:all .2s;
+}
+.home-btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.35);color:#fff}
+.home-btn svg{width:14px;height:14px;flex-shrink:0}
+
+.help-kbd{display:inline-block;background:#f0efe9;border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--text-sec)}
+
+@media(max-width:1200px){
+    :root{--table-w:600px}
+    .td-desc,.col-desc{width:140px;min-width:100px}
+    .td-assignee,.col-assignee{width:100px;min-width:80px}
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+    <div style="display:flex;align-items:center;gap:14px">
+      <a class="home-btn" href="index.html" title="Back to Toolkit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Toolkit
+      </a>
+      <h1>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="12" width="12" height="4" rx="1"/><rect x="3" y="20" width="16" height="4" rx="1"/></svg>
+          Gantt Chart Studio
+      </h1>
+    </div>
+    <div class="toolbar-actions">
+        <button class="tb-btn" id="importBtn" title="Import CSV">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import CSV
+        </button>
+        <button class="tb-btn" id="templateCsvBtn" title="Download a blank CSV template with all column headers">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Template CSV
+        </button>
+        <button class="tb-btn primary" id="addBtn" title="Add Task">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Task
+        </button>
+        <button class="tb-btn danger" id="clearAllBtn" title="Clear all tasks and settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            Clear All
+        </button>
+        <div class="tb-divider"></div>
+        <div class="zoom-group">
+            <button class="zoom-btn" id="zoomOut" title="Zoom Out"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <span class="zoom-label" id="zoomLabel">100%</span>
+            <button class="zoom-btn" id="zoomIn" title="Zoom In"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        </div>
+        <div class="tb-divider"></div>
+        <button class="tb-btn" id="exportSvgBtn">SVG</button>
+        <button class="tb-btn" id="exportPngBtn">PNG</button>
+        <button class="tb-btn" id="exportCsvBtn">CSV</button>
+        <div class="tb-divider"></div>
+        <button class="tb-btn help" id="helpBtn" title="How to use Gantt Chart Studio">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Help
+        </button>
+    </div>
+</div>
+
+<div class="legend-bar" id="legendBar">
+    <span class="legend-title">Color by</span>
+    <select class="color-by-select" id="colorBySelect">
+        <option value="product">Product</option>
+        <option value="primary">Assignee</option>
+        <option value="status">Status</option>
+        <option value="activityType">Activity Type</option>
+    </select>
+    <span class="legend-sep"></span>
+</div>
+
+<div class="main">
+    <div class="table-panel" id="tablePanel">
+        <div class="table-header-row" id="tableHeaderRow">
+            <div class="th col-id">#</div>
+            <div class="th col-activity filterable" data-field="activity">Activity<svg class="filter-icon" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2V12z"/></svg></div>
+            <div class="th col-desc filterable" data-field="description">Description<svg class="filter-icon" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2V12z"/></svg></div>
+            <div class="th col-start filterable" data-field="startDate">Start<svg class="filter-icon" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2V12z"/></svg></div>
+            <div class="th col-end filterable" data-field="endDate">End<svg class="filter-icon" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2V12z"/></svg></div>
+            <div class="th col-product filterable" data-field="product">Product<svg class="filter-icon" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2V12z"/></svg></div>
+            <div class="th col-assignee filterable" data-field="primary">Assignee<svg class="filter-icon" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2V12z"/></svg></div>
+            <div class="th col-pred" title="Predecessor task #">Pred</div>
+            <div class="th col-status filterable" data-field="status">Status<svg class="filter-icon" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2V12z"/></svg></div>
+            <div class="th col-actions" style="border-right:none"></div>
+        </div>
+        <div class="table-body" id="tableBody"></div>
+        <div class="resize-handle" id="resizeHandle"></div>
+    </div>
+    <div class="chart-panel">
+        <div class="chart-header" id="chartHeader"><div class="chart-header-inner" id="chartHeaderInner"></div></div>
+        <div class="chart-body" id="chartBody"><div class="chart-canvas" id="chartCanvas"></div></div>
+    </div>
+    <div class="empty-state" id="emptyState">
+        <div class="empty-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="12" width="12" height="4" rx="1"/><rect x="3" y="20" width="16" height="4" rx="1"/></svg></div>
+        <h2>Create Your Gantt Chart</h2>
+        <p>Import a CSV file to get started, or add tasks manually. Right-click column headers to filter.</p>
+        <div class="empty-actions">
+            <button class="empty-btn primary" id="emptyImportBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import CSV</button>
+            <button class="empty-btn secondary" id="emptyNewBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Start New</button>
+        </div>
+    </div>
+</div>
+
+<input type="file" id="fileInput" accept=".csv" hidden>
+<div id="globalTooltip"><div class="tt-arrow"></div></div>
+<div id="ctxMenu"><div class="ctx-header"><span class="ctx-title" id="ctxTitle">Filter</span><button class="ctx-btn" id="ctxAll">All</button><button class="ctx-btn" id="ctxNone">None</button></div><div class="ctx-list" id="ctxList"></div></div>
+
+<script src="shared/help-widget.js"></script>
+<button class="help-fab" id="helpFab" onclick="toggleHelp()" title="Help">?</button>
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()"></div>
+<div class="help-modal" id="helpModal">
+  <button class="help-close" onclick="toggleHelp()">&times;</button>
+  <div class="help-modal-head"><h2>Gantt Chart Studio — Help</h2><p>Project planning with timeline visualization</p></div>
+  <div class="help-modal-body">
+<h3>Getting Started</h3>
+<ul>
+<li><strong>Import CSV</strong> — Upload a CSV file to populate tasks. Columns are auto-detected by header name.</li>
+<li><strong>Template CSV</strong> — Download a blank CSV with all column headers to fill in externally and re-import.</li>
+<li><strong>Add Task</strong> — Add a new empty task row. You can also type directly into the ghost row at the bottom of the table.</li>
+<li><strong>Clear All</strong> — Remove all tasks, filters, and saved data. This cannot be undone.</li>
+</ul>
+
+<h3>Column Reference</h3>
+<ul>
+<li><strong>#</strong> — Row number / task ID. Used by Predecessor to create dependency links.</li>
+<li><strong>Activity</strong> — Name of the task, displayed on the chart bar.</li>
+<li><strong>Description</strong> — Additional details, visible in the table and tooltip on hover.</li>
+<li><strong>Start / End Date</strong> — Accepts <code>M/DD</code>, <code>M/DD/YYYY</code>, or <code>YYYY-MM-DD</code>. If end date is blank, defaults to start + 4 days.</li>
+<li><strong>Product</strong> — Built-in options: <code>CFPS</code>, <code>T7</code>, <code>Pichia</code>, <code>MutS</code>, <code>sfGFP</code>, <code>Other</code>. Custom values from CSV are also accepted.</li>
+<li><strong>Assignee</strong> — Primary assignee. Used for Color By grouping.</li>
+<li><strong>Pred (Predecessor)</strong> — Enter the task # that must finish before this task starts. Dependency arrows appear automatically on the chart.</li>
+<li><strong>Status</strong> — <code>Not Started</code>, <code>In Progress</code>, or <code>Complete</code>. Set directly via dropdown.</li>
+</ul>
+
+<h3>Editing Tasks</h3>
+<ul>
+<li><strong>Inline Editing</strong> — Click any cell in the table to edit it directly. Changes are saved automatically.</li>
+<li><strong>Delete Task</strong> — Click the trash icon on the right side of any row to remove it.</li>
+<li><strong>Dependencies</strong> — Set a task's Predecessor column to another task's # number. An arrow will appear on the chart.</li>
+</ul>
+
+<h3>Filtering &amp; Coloring</h3>
+<ul>
+<li><strong>Column Filters</strong> — Right-click any column header to open a filter menu. Check/uncheck values to show or hide matching rows.</li>
+<li><strong>Color By</strong> — Use the dropdown in the legend bar to group tasks by Product, Assignee, Status, or Activity Type.</li>
+</ul>
+
+<h3>Keyboard Shortcuts</h3>
+<ul>
+<li><code>Click</code> a cell to select it. <code>Shift+Click</code> to select a range.</li>
+<li><code>Ctrl+C</code> / <code>Ctrl+V</code> — Copy/paste cells (tab-separated, works with Excel/Sheets).</li>
+<li><code>Ctrl+D</code> — Fill down: copy first selected row's values into rows below.</li>
+<li><code>Esc</code> — Clear selection and close menus.</li>
+</ul>
+
+<h3>Exporting</h3>
+<ul>
+<li><strong>SVG</strong> — Scalable vector graphic, ideal for presentations.</li>
+<li><strong>PNG</strong> — High-resolution (2x) raster image of the chart.</li>
+<li><strong>CSV</strong> — Export currently visible (filtered) tasks.</li>
+</ul>
+
+<p>All changes are saved to your browser automatically via Local Storage.</p>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ──────────────────────────────────
+const COLOR_PALETTE = [
+    {bar:'#3b82f6',light:'#dbeafe'},{bar:'#f97316',light:'#ffedd5'},
+    {bar:'#10b981',light:'#d1fae5'},{bar:'#a855f7',light:'#f3e8ff'},
+    {bar:'#06b6d4',light:'#cffafe'},{bar:'#ef4444',light:'#fee2e2'},
+    {bar:'#eab308',light:'#fef9c3'},{bar:'#ec4899',light:'#fce7f3'},
+    {bar:'#14b8a6',light:'#ccfbf1'},{bar:'#8b5cf6',light:'#ede9fe'},
+    {bar:'#f43f5e',light:'#ffe4e6'},{bar:'#84cc16',light:'#ecfccb'},
+];
+const PRODUCT_COLORS = {
+    'CFPS':{bar:'#3b82f6',light:'#dbeafe'},'T7':{bar:'#f97316',light:'#ffedd5'},
+    'Pichia':{bar:'#10b981',light:'#d1fae5'},'MutS':{bar:'#a855f7',light:'#f3e8ff'},
+    'sfGFP':{bar:'#06b6d4',light:'#cffafe'},'Other':{bar:'#64748b',light:'#f1f5f9'},
+};
+const DEFAULT_COLOR = {bar:'#8b5cf6',light:'#ede9fe'};
+const STATUS_OPTS = ['Not Started','In Progress','Complete'];
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const FIELDS = ['activity','description','startDate','endDate','product','primary','predecessor','status'];
+const FIELD_LABELS = {activity:'Activity',description:'Description',startDate:'Start',endDate:'End',product:'Product',primary:'Assignee',predecessor:'Pred',status:'Status',activityType:'Activity Type'};
+const STORAGE_KEY = 'gantt-studio-state';
+
+// ─── STATE ───────────────────────────────────
+let dayWidth = 36, tasks = [], nextId = 1, timelineStart = null, timelineEnd = null;
+let colorByField = 'product';
+let filters = {};
+let dynamicColors = {};
+let selAnchor = null, selEnd = null;
+let ctxField = null;
+
+// ─── DOM REFS ────────────────────────────────
+const $ = id => document.getElementById(id);
+const tableBody = $('tableBody'), chartBody = $('chartBody'), chartHeader = $('chartHeader');
+const chartHeaderInner = $('chartHeaderInner'), chartCanvas = $('chartCanvas');
+const tablePanel = $('tablePanel'), emptyState = $('emptyState'), fileInput = $('fileInput');
+const tooltipEl = $('globalTooltip'), ctxMenu = $('ctxMenu'), ctxList = $('ctxList');
+
+// ─── CSV PARSING ─────────────────────────────
+function parseCSV(text) {
+    const rows = []; let row = [], field = '', inQ = false;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i], n = text[i+1];
+        if (inQ) { if (c==='"'&&n==='"'){field+='"';i++} else if(c==='"')inQ=false; else field+=c; }
+        else { if(c==='"')inQ=true; else if(c===','){row.push(field);field='';} else if(c==='\n'||(c==='\r'&&n==='\n')){row.push(field);field='';if(row.length>1||row[0]!=='')rows.push(row);row=[];if(c==='\r')i++;} else field+=c; }
+    }
+    if (field||row.length) {row.push(field);rows.push(row);} return rows;
+}
+function mapCSVToTasks(rows) {
+    if (rows.length<2) return [];
+    const headers = rows[0].map(h=>h.trim().toLowerCase());
+    const col = names => { for(const name of names){const i=headers.findIndex(h=>h.includes(name));if(i>=0)return i;} return -1; };
+    const cId=col(['#']),cAct=col(['activity']),cDesc=col(['description','notes']),cDate=col(['week','start','date']),cEndD=col(['end date']),cType=col(['type']),cProd=col(['product']),cPri=col(['primary','assignee','owner']),cBak=col(['backup']),cPred=col(['predecessor']),cProg=col(['progress','in progress']),cComp=col(['complete']),cLink=col(['link','result']);
+    const result=[], yr=new Date().getFullYear();
+    for(let i=1;i<rows.length;i++){
+        const r=rows[i]; if(!r||r.length<2)continue;
+        const g=idx=>(idx>=0&&idx<r.length)?r[idx].trim():'';
+        let sd=null; const ds=g(cDate);
+        if(ds){const p=ds.split('/');if(p.length>=2){const m=parseInt(p[0])-1,d=parseInt(p[1]),y=p.length>=3?parseInt(p[2]):yr;sd=new Date(y<100?y+2000:y,m,d);}else{const x=new Date(ds);if(!isNaN(x))sd=x;}}
+        let ed=null;const es=g(cEndD);
+        if(es){const p=es.split('/');if(p.length>=2){const m=parseInt(p[0])-1,d=parseInt(p[1]),y=p.length>=3?parseInt(p[2]):yr;ed=new Date(y<100?y+2000:y,m,d);}}
+        if(!ed&&sd){ed=new Date(sd);ed.setDate(ed.getDate()+4);}
+        if(!sd){sd=new Date();ed=new Date();ed.setDate(ed.getDate()+4);}
+        const pv=g(cProg).toUpperCase(),cv=g(cComp).toUpperCase();
+        let st='Not Started';if(cv==='TRUE')st='Complete';else if(pv==='TRUE')st='In Progress';
+        const tn=g(cId)?parseInt(g(cId)):i;
+        const ps=g(cPred);let pred=null;if(ps&&!isNaN(parseInt(ps)))pred=parseInt(ps);
+        result.push({id:nextId++,taskNum:tn,activity:g(cAct),description:g(cDesc),startDate:sd,endDate:ed,activityType:g(cType),product:g(cProd),primary:g(cPri),backup:g(cBak),predecessor:pred,status:st,link:g(cLink)});
+    } return result;
+}
+
+// ─── DATE UTILS ──────────────────────────────
+function daysBetween(a,b){return Math.round((b-a)/864e5)}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r}
+function fmtDate(d){if(!d)return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function parseInputDate(s){if(!s)return null;const d=new Date(s+'T00:00:00');return isNaN(d)?null:d}
+function isSameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate()}
+function isWeekend(d){const day=d.getDay();return day===0||day===6}
+function formatDateShort(d){return MONTH_NAMES[d.getMonth()]+' '+d.getDate()}
+
+// ─── TIMELINE ────────────────────────────────
+function calculateTimeline(){
+    if(tasks.length===0){const t=new Date();t.setHours(0,0,0,0);timelineStart=addDays(t,-7);timelineEnd=addDays(t,28);return}
+    let mn=tasks[0].startDate,mx=tasks[0].endDate;
+    tasks.forEach(t=>{if(t.startDate<mn)mn=t.startDate;if(t.endDate>mx)mx=t.endDate;});
+    timelineStart=addDays(mn,-3);while(timelineStart.getDay()!==1)timelineStart=addDays(timelineStart,-1);
+    timelineEnd=addDays(mx,7);while(timelineEnd.getDay()!==0)timelineEnd=addDays(timelineEnd,1);
+}
+function dateToX(d){return daysBetween(timelineStart,d)*dayWidth}
+function totalDays(){return daysBetween(timelineStart,timelineEnd)+1}
+
+// ─── DATA MANAGEMENT ─────────────────────────
+function addTask(data){
+    const today=new Date();today.setHours(0,0,0,0);
+    const mx=tasks.length>0?Math.max(...tasks.map(t=>t.taskNum)):0;
+    const t={id:nextId++,taskNum:mx+1,activity:'',description:'',startDate:today,endDate:addDays(today,4),activityType:'',product:'',primary:'',backup:'',predecessor:null,status:'Not Started',link:'',...data};
+    tasks.push(t);return t;
+}
+function updateTask(id,field,value){
+    const t=tasks.find(t=>t.id===id);if(!t)return;
+    if(field==='predecessor'){value=value?parseInt(value,10)||null:null;if(value===t.taskNum)value=null;}
+    if(field==='startDate'||field==='endDate'){const d=parseInputDate(value);if(d)t[field]=d;}else t[field]=value;
+}
+function deleteTask(id){tasks=tasks.filter(t=>t.id!==id)}
+function sortByPredecessor(){
+    const m=new Map();tasks.forEach(t=>m.set(t.taskNum,t));
+    const ch=new Map();tasks.forEach(t=>ch.set(t.taskNum,[]));
+    tasks.forEach(t=>{if(t.predecessor&&m.has(t.predecessor))ch.get(t.predecessor).push(t)});
+    const roots=tasks.filter(t=>!t.predecessor||!m.has(t.predecessor));roots.sort((a,b)=>a.taskNum-b.taskNum);
+    const vis=new Set(),sorted=[];
+    function dfs(t){if(vis.has(t.taskNum))return;vis.add(t.taskNum);sorted.push(t);(ch.get(t.taskNum)||[]).sort((a,b)=>a.taskNum-b.taskNum).forEach(c=>dfs(c))}
+    roots.forEach(r=>dfs(r));tasks.forEach(t=>{if(!vis.has(t.taskNum))sorted.push(t)});tasks=sorted;
+}
+function getVisibleTasks(){
+    return tasks.filter(t=>{
+        for(const[field,allowed]of Object.entries(filters)){
+            const val=getFieldDisplay(t,field);
+            if(!allowed.has(val))return false;
+        } return true;
+    });
+}
+function getFieldDisplay(t,field){
+    if(field==='startDate')return fmtDate(t.startDate);
+    if(field==='endDate')return fmtDate(t.endDate);
+    return String(t[field]||'(empty)');
+}
+
+// ─── COLOR MANAGEMENT ────────────────────────
+function buildColorMap(){
+    const vals=[...new Set(tasks.map(t=>t[colorByField]||'').filter(Boolean))].sort();
+    dynamicColors={};
+    if(colorByField==='product'){
+        vals.forEach((v,i)=>{dynamicColors[v]=PRODUCT_COLORS[v]||COLOR_PALETTE[i%COLOR_PALETTE.length]});
+    } else {
+        vals.forEach((v,i)=>{dynamicColors[v]=COLOR_PALETTE[i%COLOR_PALETTE.length]});
+    }
+}
+function getColor(value){return dynamicColors[value]||DEFAULT_COLOR}
+
+// ─── RENDER TABLE ────────────────────────────
+function renderTable(){
+    tableBody.innerHTML='';
+    const visible=getVisibleTasks();
+    visible.forEach((task,ri)=>{
+        const row=document.createElement('div');row.className='table-row';row.dataset.id=task.id;
+        const c=getColor(task[colorByField]);
+        row.innerHTML=`
+            <div class="td col-id td-id"><span class="row-dot" style="background:${c.bar}"></span>${task.taskNum}</div>
+            <div class="td col-activity td-activity" data-r="${ri}" data-c="0"><input type="text" value="${esc(task.activity)}" data-field="activity" placeholder="Task name"></div>
+            <div class="td col-desc td-desc" data-r="${ri}" data-c="1"><input type="text" value="${esc(task.description)}" data-field="description" title="${esc(task.description)}" placeholder="Description"></div>
+            <div class="td col-start td-date" data-r="${ri}" data-c="2"><input type="date" value="${fmtDate(task.startDate)}" data-field="startDate"></div>
+            <div class="td col-end td-date" data-r="${ri}" data-c="3"><input type="date" value="${fmtDate(task.endDate)}" data-field="endDate"></div>
+            <div class="td col-product td-product" data-r="${ri}" data-c="4"><select data-field="product"><option value="">—</option>${Object.keys(PRODUCT_COLORS).map(p=>`<option value="${p}"${task.product===p?' selected':''}>${p}</option>`).join('')}${task.product&&!PRODUCT_COLORS[task.product]?`<option value="${esc(task.product)}" selected>${esc(task.product)}</option>`:''}</select></div>
+            <div class="td col-assignee td-assignee" data-r="${ri}" data-c="5"><input type="text" value="${esc(task.primary)}" data-field="primary" placeholder="Assignee"></div>
+            <div class="td col-pred" data-r="${ri}" data-c="6"><input type="number" min="1" data-field="predecessor" value="${task.predecessor||''}" placeholder="—" style="width:100%;border:none;background:transparent;font:inherit;text-align:center;color:inherit;outline:none" title="Enter task # this depends on"></div>
+            <div class="td col-status td-status" data-r="${ri}" data-c="7"><select data-field="status">${STATUS_OPTS.map(s=>`<option value="${s}"${task.status===s?' selected':''}>${s}</option>`).join('')}</select></div>
+            <div class="td col-actions td-actions"><button class="del-btn" data-del="${task.id}" title="Delete"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div>`;
+        tableBody.appendChild(row);
+    });
+    renderGhostRow(visible.length);
+    bindTableEvents();
+    updateSelectionUI();
+    updateFilterIndicators();
+}
+
+function renderGhostRow(ri){
+    const row=document.createElement('div');row.className='table-row ghost-row';row.dataset.ghost='1';
+    row.innerHTML=`
+        <div class="td col-id td-id">+</div>
+        <div class="td col-activity td-activity" data-r="${ri}" data-c="0"><input type="text" data-field="activity" placeholder="New task..."></div>
+        <div class="td col-desc td-desc" data-r="${ri}" data-c="1"><input type="text" data-field="description" placeholder="Description"></div>
+        <div class="td col-start td-date" data-r="${ri}" data-c="2"><input type="date" data-field="startDate"></div>
+        <div class="td col-end td-date" data-r="${ri}" data-c="3"><input type="date" data-field="endDate"></div>
+        <div class="td col-product td-product" data-r="${ri}" data-c="4"><select data-field="product"><option value="">—</option>${Object.keys(PRODUCT_COLORS).map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div>
+        <div class="td col-assignee td-assignee" data-r="${ri}" data-c="5"><input type="text" data-field="primary" placeholder="Assignee"></div>
+        <div class="td col-pred" data-r="${ri}" data-c="6"><input type="number" min="1" id="gPred" placeholder="—" style="width:100%;border:none;background:transparent;font:inherit;text-align:center;color:#94a3b8;outline:none"></div>
+        <div class="td col-status td-status" data-r="${ri}" data-c="7"><select data-field="status">${STATUS_OPTS.map(s=>`<option value="${s}">${s}</option>`).join('')}</select></div>
+        <div class="td col-actions td-actions"></div>`;
+    const actInput=row.querySelector('[data-field="activity"]');
+    actInput.addEventListener('change',()=>{
+        if(!actInput.value.trim())return;
+        const data={activity:actInput.value.trim()};
+        row.querySelectorAll('[data-field]').forEach(el=>{
+            const f=el.dataset.field,v=el.value;if(f==='activity'||!v)return;
+            data[f]=v;
+        });
+        const pred=document.getElementById('gPred');
+        if(pred&&pred.value)data.predecessor=parseInt(pred.value,10)||null;
+        addTask(data);if(pred)pred.value='';saveState();renderAll();
+        setTimeout(()=>{const rows=tableBody.querySelectorAll('.table-row:not(.ghost-row)');if(rows.length)rows[rows.length-1].querySelector('input')?.focus()},50);
+    });
+    tableBody.appendChild(row);
+}
+
+function bindTableEvents(){
+    tableBody.querySelectorAll('.table-row:not(.ghost-row) input, .table-row:not(.ghost-row) select').forEach(el=>{
+        el.addEventListener('change',e=>{
+            const id=parseInt(e.target.closest('.table-row').dataset.id);
+            updateTask(id,e.target.dataset.field,e.target.value);
+            buildColorMap();calculateTimeline();renderChart();renderLegend();saveState();
+        });
+    });
+    tableBody.querySelectorAll('.del-btn').forEach(btn=>{
+        btn.addEventListener('click',e=>{deleteTask(parseInt(e.currentTarget.dataset.del));saveState();renderAll()});
+    });
+    tableBody.querySelectorAll('.td[data-c]').forEach(td=>{
+        td.addEventListener('mousedown',e=>{
+            if(e.target.closest('.del-btn'))return;
+            const r=parseInt(td.dataset.r),c=parseInt(td.dataset.c);
+            if(e.shiftKey&&selAnchor){selEnd={row:r,col:c};updateSelectionUI();e.preventDefault();}
+            else{selAnchor={row:r,col:c};selEnd={row:r,col:c};updateSelectionUI();}
+        });
+    });
+}
+
+function esc(s){if(!s)return '';return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+// ─── SELECTION ───────────────────────────────
+function getSelRange(){
+    if(!selAnchor||!selEnd)return null;
+    return {r1:Math.min(selAnchor.row,selEnd.row),r2:Math.max(selAnchor.row,selEnd.row),c1:Math.min(selAnchor.col,selEnd.col),c2:Math.max(selAnchor.col,selEnd.col)};
+}
+function updateSelectionUI(){
+    tableBody.querySelectorAll('.cell-selected').forEach(el=>el.classList.remove('cell-selected'));
+    const range=getSelRange();if(!range)return;
+    tableBody.querySelectorAll('.td[data-c]').forEach(td=>{
+        const r=parseInt(td.dataset.r),c=parseInt(td.dataset.c);
+        if(r>=range.r1&&r<=range.r2&&c>=range.c1&&c<=range.c2)td.classList.add('cell-selected');
+    });
+}
+function clearSelection(){selAnchor=null;selEnd=null;updateSelectionUI()}
+
+function handleCopy(e){
+    const range=getSelRange();if(!range)return;
+    const visible=getVisibleTasks();let text='';
+    for(let r=range.r1;r<=range.r2;r++){
+        if(r>=visible.length)break;const task=visible[r];const cols=[];
+        for(let c=range.c1;c<=range.c2;c++){
+            const f=FIELDS[c];if(!f)continue;
+            let v=task[f]||'';if(f==='startDate'||f==='endDate')v=fmtDate(v);cols.push(v);
+        } text+=cols.join('\t')+'\n';
+    }
+    e.preventDefault();e.clipboardData.setData('text/plain',text);
+}
+function handlePaste(e){
+    const range=getSelRange();if(!range)return;
+    e.preventDefault();
+    const text=(e.clipboardData||window.clipboardData).getData('text');
+    const rows=text.split(/\r?\n/).filter(r=>r.length>0);
+    const visible=getVisibleTasks();
+    for(let r=0;r<rows.length;r++){
+        const ri=range.r1+r;if(ri>=visible.length)break;
+        const cols=rows[r].split('\t');const task=visible[ri];
+        for(let c=0;c<cols.length;c++){
+            const ci=range.c1+c;if(ci>=FIELDS.length)break;
+            updateTask(task.id,FIELDS[ci],cols[c]);
+        }
+    }
+    buildColorMap();saveState();renderAll();
+}
+function handleFillDown(){
+    const range=getSelRange();if(!range||range.r1===range.r2)return;
+    const visible=getVisibleTasks();if(range.r1>=visible.length)return;
+    const src=visible[range.r1];
+    for(let r=range.r1+1;r<=range.r2;r++){
+        if(r>=visible.length)break;const task=visible[r];
+        for(let c=range.c1;c<=range.c2;c++){
+            const f=FIELDS[c];if(!f)continue;
+            let v=src[f]||'';if(f==='startDate'||f==='endDate')v=fmtDate(v);
+            updateTask(task.id,f,String(v));
+        }
+    }
+    buildColorMap();saveState();renderAll();
+}
+
+// ─── RENDER CHART ────────────────────────────
+function renderChart(){
+    const visible=getVisibleTasks();
+    const td=totalDays(),canvasW=td*dayWidth;
+    const rowH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--row-h'));
+    const canvasH=visible.length*rowH||100;
+    chartCanvas.style.width=canvasW+'px';chartCanvas.style.height=canvasH+'px';chartCanvas.innerHTML='';
+    renderTimelineHeader(td,canvasW);renderGrid(td,canvasW,canvasH,rowH,visible);
+    renderBars(rowH,visible);renderDependencies(rowH,visible);
+}
+function renderTimelineHeader(td,canvasW){
+    chartHeaderInner.style.width=canvasW+'px';chartHeaderInner.innerHTML='';
+    const mRow=document.createElement('div');mRow.className='month-row';
+    const dRow=document.createElement('div');dRow.className='day-row';
+    let cm=-1,ms=0;const today=new Date();today.setHours(0,0,0,0);
+    for(let i=0;i<td;i++){
+        const d=addDays(timelineStart,i),m=d.getMonth();
+        if(m!==cm){if(cm>=0){const c=document.createElement('div');c.className='month-cell';c.style.width=(i-ms)*dayWidth+'px';c.textContent=MONTH_NAMES[cm]+' '+addDays(timelineStart,ms).getFullYear();mRow.appendChild(c)}cm=m;ms=i}
+        const dc=document.createElement('div');dc.className='day-cell';if(isWeekend(d))dc.classList.add('weekend');if(isSameDay(d,today))dc.classList.add('today');dc.style.width=dayWidth+'px';dc.textContent=d.getDate();dRow.appendChild(dc);
+    }
+    if(cm>=0){const c=document.createElement('div');c.className='month-cell';c.style.width=(td-ms)*dayWidth+'px';c.textContent=MONTH_NAMES[cm]+' '+addDays(timelineStart,ms).getFullYear();mRow.appendChild(c)}
+    chartHeaderInner.appendChild(mRow);chartHeaderInner.appendChild(dRow);
+}
+function renderGrid(td,canvasW,canvasH,rowH,visible){
+    const today=new Date();today.setHours(0,0,0,0);
+    const contentH=visible.length*rowH;
+    for(let i=0;i<td;i++){
+        const d=addDays(timelineStart,i);const col=document.createElement('div');col.className='grid-col';
+        if(isWeekend(d))col.classList.add('weekend');col.style.left=i*dayWidth+'px';col.style.width=dayWidth+'px';col.style.height=contentH+'px';chartCanvas.appendChild(col);
+        if(isSameDay(d,today)){const tl=document.createElement('div');tl.className='today-line';tl.style.left=(i*dayWidth+dayWidth/2)+'px';tl.style.height=contentH+'px';chartCanvas.appendChild(tl)}
+    }
+    for(let i=0;i<visible.length;i++){const gr=document.createElement('div');gr.className='grid-row';gr.style.top=i*rowH+'px';chartCanvas.appendChild(gr)}
+}
+function renderBars(rowH,visible){
+    visible.forEach((task,idx)=>{
+        const x=dateToX(task.startDate),w=Math.max((daysBetween(task.startDate,task.endDate)+1)*dayWidth-4,dayWidth-4);
+        const y=idx*rowH+(rowH-26)/2,color=getColor(task[colorByField]);
+        const bar=document.createElement('div');bar.className='bar';
+        if(task.status==='Complete')bar.classList.add('complete');
+        if(task.status==='Not Started')bar.classList.add('not-started');
+        bar.style.left=(x+2)+'px';bar.style.top=y+'px';bar.style.width=w+'px';
+        bar.style.background=`linear-gradient(180deg,${color.bar},${adjustColor(color.bar,-20)})`;
+        bar.style.animationDelay=`${idx*25}ms`;
+        bar.innerHTML=`<span class="bar-label">${esc(task.activity)}</span>`;
+        bar.addEventListener('mouseenter',e=>showTooltip(e,task));
+        bar.addEventListener('mouseleave',hideTooltip);bar.addEventListener('mousemove',e=>moveTooltip(e));
+        chartCanvas.appendChild(bar);
+    });
+}
+function renderDependencies(rowH,visible){
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.classList.add('dep-svg');
+    const cw=parseInt(chartCanvas.style.width)||800,ch=parseInt(chartCanvas.style.height)||400;
+    svg.setAttribute('width',cw);svg.setAttribute('height',ch);svg.setAttribute('viewBox',`0 0 ${cw} ${ch}`);
+    const defs=document.createElementNS('http://www.w3.org/2000/svg','defs');
+    const marker=document.createElementNS('http://www.w3.org/2000/svg','marker');
+    marker.setAttribute('id','arrow');marker.setAttribute('viewBox','0 0 10 10');marker.setAttribute('refX','9');marker.setAttribute('refY','5');marker.setAttribute('markerWidth','6');marker.setAttribute('markerHeight','6');marker.setAttribute('orient','auto-start-reverse');
+    const ap=document.createElementNS('http://www.w3.org/2000/svg','path');ap.setAttribute('d','M 0 0 L 10 5 L 0 10 z');ap.setAttribute('fill','#94a3b8');marker.appendChild(ap);defs.appendChild(marker);svg.appendChild(defs);
+    visible.forEach((task,idx)=>{
+        if(!task.predecessor)return;
+        const predIdx=visible.findIndex(t=>t.taskNum===task.predecessor);if(predIdx<0)return;
+        const pred=visible[predIdx];
+        const x1=dateToX(pred.endDate)+dayWidth,y1=predIdx*rowH+rowH/2,x2=dateToX(task.startDate)+2,y2=idx*rowH+rowH/2;
+        const mx=x1+12;const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+        path.setAttribute('d',`M ${x1} ${y1} H ${mx} V ${y2} H ${x2}`);path.setAttribute('stroke','#94a3b8');path.setAttribute('stroke-width','1.5');path.setAttribute('fill','none');path.setAttribute('marker-end','url(#arrow)');path.setAttribute('stroke-dasharray','4 2');svg.appendChild(path);
+    });
+    chartCanvas.appendChild(svg);
+}
+function adjustColor(hex,amt){let r=parseInt(hex.slice(1,3),16)+amt,g=parseInt(hex.slice(3,5),16)+amt,b=parseInt(hex.slice(5,7),16)+amt;r=Math.max(0,Math.min(255,r));g=Math.max(0,Math.min(255,g));b=Math.max(0,Math.min(255,b));return '#'+[r,g,b].map(c=>c.toString(16).padStart(2,'0')).join('')}
+
+// ─── TOOLTIP ─────────────────────────────────
+function showTooltip(e,task){
+    let h=`<div class="tt-title">${esc(task.activity)}</div>`;
+    if(task.description){const d=task.description.length>100?task.description.substring(0,100)+'…':task.description;h+=`<div class="tt-row"><span class="tt-label">Desc</span>${esc(d)}</div>`}
+    h+=`<div class="tt-row"><span class="tt-label">Dates</span>${formatDateShort(task.startDate)} – ${formatDateShort(task.endDate)}</div>`;
+    if(task.primary)h+=`<div class="tt-row"><span class="tt-label">Assignee</span>${esc(task.primary)}</div>`;
+    h+=`<div class="tt-row"><span class="tt-label">Status</span>${task.status}</div>`;
+    if(task.product)h+=`<div class="tt-row"><span class="tt-label">Product</span>${esc(task.product)}</div>`;
+    if(task.predecessor)h+=`<div class="tt-row"><span class="tt-label">Depends</span>Task #${task.predecessor}</div>`;
+    h+='<div class="tt-arrow"></div>';tooltipEl.innerHTML=h;tooltipEl.classList.add('visible');positionTooltip(e);
+}
+function moveTooltip(e){positionTooltip(e)}
+function hideTooltip(){tooltipEl.classList.remove('visible')}
+function positionTooltip(e){
+    const bar=e.currentTarget,rect=bar.getBoundingClientRect();
+    tooltipEl.style.visibility='hidden';tooltipEl.style.display='block';
+    const tw=tooltipEl.offsetWidth,th=tooltipEl.offsetHeight;tooltipEl.style.display='';tooltipEl.style.visibility='';
+    let left=rect.left+rect.width/2-tw/2;left=Math.max(8,Math.min(left,window.innerWidth-tw-8));
+    if(rect.top>=th+18){tooltipEl.style.top=(rect.top-th-10)+'px';tooltipEl.classList.remove('below');tooltipEl.classList.add('above')}
+    else{tooltipEl.style.top=(rect.bottom+10)+'px';tooltipEl.classList.remove('above');tooltipEl.classList.add('below')}
+    tooltipEl.style.left=left+'px';
+}
+
+// ─── LEGEND ──────────────────────────────────
+function renderLegend(){
+    const bar=$('legendBar');
+    const sel=bar.querySelector('.color-by-select');
+    bar.innerHTML='';
+    const title=document.createElement('span');title.className='legend-title';title.textContent='Color by';bar.appendChild(title);
+    bar.appendChild(sel);
+    const sep=document.createElement('span');sep.className='legend-sep';bar.appendChild(sep);
+    const vals=[...new Set(tasks.map(t=>t[colorByField]||'').filter(Boolean))].sort();
+    vals.forEach(v=>{const c=getColor(v);const item=document.createElement('span');item.className='legend-item';item.innerHTML=`<span class="legend-dot" style="background:${c.bar}"></span>${esc(v)}`;bar.appendChild(item)});
+    if(vals.length>0){const s2=document.createElement('span');s2.className='legend-sep';bar.appendChild(s2)}
+    STATUS_OPTS.forEach(s=>{const item=document.createElement('span');item.className='status-legend';const dc=s==='Complete'?'#10b981':s==='In Progress'?'#3b82f6':'#94a3b8';item.innerHTML=`<span class="dot" style="background:${dc}"></span>${s}`;bar.appendChild(item)});
+}
+
+// ─── CONTEXT MENU (column filter) ────────────
+function showCtxMenu(e,field){
+    e.preventDefault();ctxField=field;
+    const allVals=[...new Set(tasks.map(t=>getFieldDisplay(t,field)))].sort();
+    const allowed=filters[field]||new Set(allVals);
+    $('ctxTitle').textContent='Filter: '+(FIELD_LABELS[field]||field);
+    ctxList.innerHTML='';
+    allVals.forEach(v=>{
+        const item=document.createElement('label');item.className='ctx-item';
+        item.innerHTML=`<input type="checkbox" value="${esc(v)}"${allowed.has(v)?' checked':''}><span>${esc(v)}</span>`;
+        ctxList.appendChild(item);
+    });
+    ctxMenu.classList.add('visible');
+    let x=e.clientX,y=e.clientY;
+    if(x+240>window.innerWidth)x=window.innerWidth-250;
+    if(y+340>window.innerHeight)y=Math.max(10,window.innerHeight-350);
+    ctxMenu.style.left=x+'px';ctxMenu.style.top=y+'px';
+}
+function hideCtxMenu(){ctxMenu.classList.remove('visible');ctxField=null}
+function applyCtxFilter(){
+    if(!ctxField)return;
+    const checks=ctxList.querySelectorAll('input[type=checkbox]');
+    const allVals=[...new Set(tasks.map(t=>getFieldDisplay(t,ctxField)))];
+    const allowed=new Set();
+    checks.forEach(cb=>{if(cb.checked)allowed.add(cb.value)});
+    if(allowed.size===allVals.length) delete filters[ctxField];
+    else filters[ctxField]=allowed;
+    clearSelection();saveState();renderAll();
+}
+function updateFilterIndicators(){
+    document.querySelectorAll('.th.filterable').forEach(th=>{
+        const f=th.dataset.field;th.classList.toggle('filtered',!!filters[f]);
+    });
+}
+
+// ─── EXPORTS ─────────────────────────────────
+function exportToSVG(){
+    const visible=getVisibleTasks();
+    const padding=24,rowH=34,headerH=50,dw=28;
+    const tblCols=[{label:'#',w:30},{label:'Activity',w:160},{label:'Start',w:70},{label:'End',w:70},{label:FIELD_LABELS[colorByField]||'Product',w:80},{label:'Assignee',w:110},{label:'Status',w:75}];
+    const tableW=tblCols.reduce((s,c)=>s+c.w,0),td=totalDays(),chartW=td*dw;
+    const legendH=30,titleH=40,totalW=padding*2+tableW+chartW+10,totalH=padding*2+titleH+legendH+headerH+visible.length*rowH+10;
+    let svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}"><rect width="${totalW}" height="${totalH}" fill="#fff"/>`;
+    svg+=`<style>text{font-family:-apple-system,system-ui,sans-serif;fill:#334155}.hdr{font-size:10px;font-weight:600;fill:#64748b}.cell{font-size:10px;fill:#334155}.title{font-size:16px;font-weight:700;fill:#1e293b}.legend-text{font-size:9px;fill:#64748b}.grid-line{stroke:#e2e8f0;stroke-width:.5}.bar-text{font-size:9px;fill:#fff;font-weight:500}</style>`;
+    let oX=padding,oY=padding;
+    svg+=`<text x="${oX}" y="${oY+24}" class="title">Gantt Chart</text>`;oY+=titleH;
+    const usedVals=[...new Set(visible.map(t=>t[colorByField]||'').filter(Boolean))];let lx=oX;
+    usedVals.forEach(v=>{const c=getColor(v);svg+=`<rect x="${lx}" y="${oY+4}" width="10" height="10" rx="2" fill="${c.bar}"/><text x="${lx+14}" y="${oY+13}" class="legend-text">${xmlEsc(v)}</text>`;lx+=14+v.length*6+16});oY+=legendH;
+    let cx=oX;tblCols.forEach(col=>{svg+=`<rect x="${cx}" y="${oY}" width="${col.w}" height="${headerH}" fill="#F3F2EE"/><line x1="${cx}" y1="${oY}" x2="${cx}" y2="${oY+headerH+visible.length*rowH}" class="grid-line"/><text x="${cx+6}" y="${oY+headerH/2+4}" class="hdr">${col.label}</text>`;cx+=col.w});
+    svg+=`<line x1="${cx}" y1="${oY}" x2="${cx}" y2="${oY+headerH+visible.length*rowH}" class="grid-line"/><line x1="${oX}" y1="${oY+headerH}" x2="${oX+tableW}" y2="${oY+headerH}" class="grid-line"/>`;
+    const chartX=oX+tableW+10;let curMonth=-1,monthStart=0;
+    for(let i=0;i<td;i++){const d=addDays(timelineStart,i),m=d.getMonth();if(m!==curMonth){if(curMonth>=0)svg+=`<text x="${chartX+monthStart*dw+4}" y="${oY+14}" class="hdr">${MONTH_NAMES[curMonth]} ${addDays(timelineStart,monthStart).getFullYear()}</text>`;curMonth=m;monthStart=i}if(isWeekend(d))svg+=`<rect x="${chartX+i*dw}" y="${oY}" width="${dw}" height="${headerH+visible.length*rowH}" fill="#F3F2EE" opacity=".6"/>`;svg+=`<text x="${chartX+i*dw+dw/2}" y="${oY+headerH-8}" text-anchor="middle" style="font-size:8px;fill:#94a3b8">${d.getDate()}</text><line x1="${chartX+i*dw}" y1="${oY+22}" x2="${chartX+i*dw}" y2="${oY+headerH+visible.length*rowH}" class="grid-line" opacity=".4"/>`}
+    if(curMonth>=0)svg+=`<text x="${chartX+monthStart*dw+4}" y="${oY+14}" class="hdr">${MONTH_NAMES[curMonth]} ${addDays(timelineStart,monthStart).getFullYear()}</text>`;
+    visible.forEach((task,idx)=>{
+        const ry=oY+headerH+idx*rowH;if(idx%2===1)svg+=`<rect x="${oX}" y="${ry}" width="${tableW}" height="${rowH}" fill="#fafbfc"/>`;
+        svg+=`<line x1="${oX}" y1="${ry+rowH}" x2="${oX+tableW}" y2="${ry+rowH}" class="grid-line"/>`;
+        const vals=[task.taskNum,task.activity.substring(0,22)+(task.activity.length>22?'…':''),formatDateShort(task.startDate),formatDateShort(task.endDate),task[colorByField]||'',(task.primary||'').substring(0,16),task.status];
+        let tx=oX;vals.forEach((v,vi)=>{svg+=`<text x="${tx+6}" y="${ry+rowH/2+4}" class="cell">${xmlEsc(String(v||''))}</text>`;tx+=tblCols[vi].w});
+        const bx=chartX+daysBetween(timelineStart,task.startDate)*dw+1,bw=Math.max((daysBetween(task.startDate,task.endDate)+1)*dw-2,dw-2),by=ry+(rowH-22)/2;
+        const color=getColor(task[colorByField]);let op=task.status==='Not Started'?.4:task.status==='Complete'?.65:1;
+        svg+=`<rect x="${bx}" y="${by}" width="${bw}" height="22" rx="4" fill="${color.bar}" opacity="${op}"/>`;
+        if(bw>40)svg+=`<text x="${bx+6}" y="${by+15}" class="bar-text">${xmlEsc(task.activity.substring(0,Math.floor(bw/6)))}</text>`;
+        if(task.status==='Complete')svg+=`<text x="${bx+bw-14}" y="${by+15}" class="bar-text" style="font-size:11px">✓</text>`;
+    });
+    svg+=`<defs><marker id="svgArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#94a3b8"/></marker></defs>`;
+    visible.forEach((task,idx)=>{if(!task.predecessor)return;const pi=visible.findIndex(t=>t.taskNum===task.predecessor);if(pi<0)return;const pred=visible[pi];const x1=chartX+(daysBetween(timelineStart,pred.endDate)+1)*dw,y1=oY+headerH+pi*rowH+rowH/2,x2=chartX+daysBetween(timelineStart,task.startDate)*dw+1,y2=oY+headerH+idx*rowH+rowH/2,mx=x1+8;svg+=`<path d="M${x1} ${y1}H${mx}V${y2}H${x2}" fill="none" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2" marker-end="url(#svgArrow)"/>`});
+    svg+='</svg>';downloadFile(new Blob([svg],{type:'image/svg+xml'}),'gantt-chart.svg');
+}
+function xmlEsc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+function exportToPNG(){
+    const visible=getVisibleTasks();
+    const padding=24,rowH=34,headerH=50,dw=28;
+    const tblCols=[{label:'#',w:30},{label:'Activity',w:160},{label:'Start',w:70},{label:'End',w:70},{label:FIELD_LABELS[colorByField]||'Product',w:80},{label:'Assignee',w:110},{label:'Status',w:75}];
+    const tableW=tblCols.reduce((s,c)=>s+c.w,0),td=totalDays(),chartW=td*dw;
+    const legendH=30,titleH=40,totalW=padding*2+tableW+chartW+10,totalH=padding*2+titleH+legendH+headerH+visible.length*rowH+10;
+    const scale=2,canvas=document.createElement('canvas');canvas.width=totalW*scale;canvas.height=totalH*scale;
+    const ctx=canvas.getContext('2d');ctx.scale(scale,scale);ctx.fillStyle='#fff';ctx.fillRect(0,0,totalW,totalH);
+    let oX=padding,oY=padding;ctx.font='700 16px -apple-system,system-ui,sans-serif';ctx.fillStyle='#1e293b';ctx.fillText('Gantt Chart',oX,oY+24);oY+=titleH;
+    const usedVals=[...new Set(visible.map(t=>t[colorByField]||'').filter(Boolean))];let lx=oX;ctx.font='500 9px -apple-system,system-ui,sans-serif';
+    usedVals.forEach(v=>{const c=getColor(v);ctx.fillStyle=c.bar;roundRect(ctx,lx,oY+4,10,10,2);ctx.fill();ctx.fillStyle='#64748b';ctx.fillText(v,lx+14,oY+13);lx+=14+ctx.measureText(v).width+16});oY+=legendH;
+    ctx.fillStyle='#F3F2EE';ctx.fillRect(oX,oY,tableW,headerH);ctx.font='600 10px -apple-system,system-ui,sans-serif';ctx.fillStyle='#64748b';
+    let cx=oX;tblCols.forEach(col=>{ctx.fillText(col.label.toUpperCase(),cx+6,oY+headerH/2+3);ctx.strokeStyle='#e2e8f0';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(cx,oY);ctx.lineTo(cx,oY+headerH+visible.length*rowH);ctx.stroke();cx+=col.w});
+    ctx.beginPath();ctx.moveTo(cx,oY);ctx.lineTo(cx,oY+headerH+visible.length*rowH);ctx.stroke();
+    const chartXPng=oX+tableW+10;let curMonth=-1,monthStart=0;
+    for(let i=0;i<td;i++){const d=addDays(timelineStart,i),m=d.getMonth();if(m!==curMonth){if(curMonth>=0){ctx.font='600 10px -apple-system,system-ui,sans-serif';ctx.fillStyle='#64748b';ctx.fillText(`${MONTH_NAMES[curMonth]} ${addDays(timelineStart,monthStart).getFullYear()}`,chartXPng+monthStart*dw+4,oY+14)}curMonth=m;monthStart=i}if(isWeekend(d)){ctx.fillStyle='rgba(248,250,252,0.6)';ctx.fillRect(chartXPng+i*dw,oY,dw,headerH+visible.length*rowH)}ctx.font='500 8px -apple-system,system-ui,sans-serif';ctx.fillStyle='#94a3b8';ctx.textAlign='center';ctx.fillText(String(d.getDate()),chartXPng+i*dw+dw/2,oY+headerH-8);ctx.textAlign='left';ctx.strokeStyle='#e2e8f0';ctx.lineWidth=.3;ctx.beginPath();ctx.moveTo(chartXPng+i*dw,oY+22);ctx.lineTo(chartXPng+i*dw,oY+headerH+visible.length*rowH);ctx.stroke()}
+    if(curMonth>=0){ctx.font='600 10px -apple-system,system-ui,sans-serif';ctx.fillStyle='#64748b';ctx.fillText(`${MONTH_NAMES[curMonth]} ${addDays(timelineStart,monthStart).getFullYear()}`,chartXPng+monthStart*dw+4,oY+14)}
+    visible.forEach((task,idx)=>{
+        const ry=oY+headerH+idx*rowH;if(idx%2===1){ctx.fillStyle='#fafbfc';ctx.fillRect(oX,ry,tableW,rowH)}
+        ctx.strokeStyle='#e2e8f0';ctx.lineWidth=.3;ctx.beginPath();ctx.moveTo(oX,ry+rowH);ctx.lineTo(oX+tableW,ry+rowH);ctx.stroke();
+        const vals=[String(task.taskNum),task.activity.substring(0,22)+(task.activity.length>22?'…':''),formatDateShort(task.startDate),formatDateShort(task.endDate),task[colorByField]||'',(task.primary||'').substring(0,16),task.status];
+        ctx.font='400 10px -apple-system,system-ui,sans-serif';ctx.fillStyle='#334155';let tx=oX;vals.forEach((v,vi)=>{ctx.fillText(v,tx+6,ry+rowH/2+4);tx+=tblCols[vi].w});
+        const bx=chartXPng+daysBetween(timelineStart,task.startDate)*dw+1,bw=Math.max((daysBetween(task.startDate,task.endDate)+1)*dw-2,dw-2),by=ry+(rowH-22)/2;
+        const color=getColor(task[colorByField]);ctx.globalAlpha=task.status==='Not Started'?.4:task.status==='Complete'?.65:1;ctx.fillStyle=color.bar;roundRect(ctx,bx,by,bw,22,4);ctx.fill();ctx.globalAlpha=1;
+        if(bw>40){ctx.font='500 9px -apple-system,system-ui,sans-serif';ctx.fillStyle='#fff';ctx.fillText(task.activity.substring(0,Math.floor(bw/6)),bx+6,by+15)}
+        if(task.status==='Complete'){ctx.font='700 11px -apple-system,system-ui,sans-serif';ctx.fillStyle='#fff';ctx.fillText('✓',bx+bw-14,by+15)}
+    });
+    ctx.strokeStyle='#94a3b8';ctx.lineWidth=1;ctx.setLineDash([3,2]);
+    visible.forEach((task,idx)=>{if(!task.predecessor)return;const pi=visible.findIndex(t=>t.taskNum===task.predecessor);if(pi<0)return;const pred=visible[pi];const x1=chartXPng+(daysBetween(timelineStart,pred.endDate)+1)*dw,y1=oY+headerH+pi*rowH+rowH/2,x2=chartXPng+daysBetween(timelineStart,task.startDate)*dw+1,y2=oY+headerH+idx*rowH+rowH/2,mx=x1+8;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(mx,y1);ctx.lineTo(mx,y2);ctx.lineTo(x2,y2);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#94a3b8';ctx.beginPath();ctx.moveTo(x2,y2-3);ctx.lineTo(x2,y2+3);ctx.lineTo(x2-5,y2);ctx.closePath();ctx.fill();ctx.setLineDash([3,2])});
+    ctx.setLineDash([]);canvas.toBlob(blob=>{if(blob)downloadFile(blob,'gantt-chart.png')},'image/png');
+}
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
+
+function downloadTemplateCSV(){
+    const headers=['#','Activity','Description / Notes','Start Date','End Date','Activity Type','Product','Primary','Backup','Predecessor','In Progress','Complete','Status'];
+    downloadFile(new Blob([headers.join(',')],{type:'text/csv;charset=utf-8'}),'gantt-template.csv');
+}
+
+function exportToCSV(){
+    const headers=['#','Activity','Description / Notes','Start Date','End Date','Activity Type','Product','Primary','Backup','Predecessor','In Progress','Complete','Status'];
+    const rows=[headers.join(',')];
+    getVisibleTasks().forEach(t=>{rows.push([t.taskNum,csvQ(t.activity),csvQ(t.description),fmtDate(t.startDate),fmtDate(t.endDate),csvQ(t.activityType),csvQ(t.product),csvQ(t.primary),csvQ(t.backup),t.predecessor||'',t.status==='In Progress'?'TRUE':'FALSE',t.status==='Complete'?'TRUE':'FALSE',t.status].join(','))});
+    downloadFile(new Blob([rows.join('\n')],{type:'text/csv;charset=utf-8'}),'gantt-chart.csv');
+}
+function csvQ(s){if(!s)return '';if(s.includes(',')||s.includes('"')||s.includes('\n'))return '"'+s.replace(/"/g,'""')+'"';return s}
+function downloadFile(blob,fn){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=fn;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u)}
+
+// ─── LOCALSTORAGE ────────────────────────────
+function saveState(){
+    try{
+        const state={
+            tasks:tasks.map(t=>({...t,startDate:t.startDate.toISOString(),endDate:t.endDate.toISOString()})),
+            nextId,colorByField,dayWidth,
+            filters:Object.fromEntries(Object.entries(filters).map(([k,v])=>[k,[...v]])),
+        };
+        localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+    }catch(e){}
+}
+function loadState(){
+    try{
+        const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;
+        const s=JSON.parse(raw);
+        tasks=s.tasks.map(t=>({...t,startDate:new Date(t.startDate),endDate:new Date(t.endDate)}));
+        nextId=s.nextId||tasks.length+1;
+        colorByField=s.colorByField||'product';
+        dayWidth=s.dayWidth||36;
+        if(s.filters)filters=Object.fromEntries(Object.entries(s.filters).map(([k,v])=>[k,new Set(v)]));
+        $('colorBySelect').value=colorByField;
+        updateZoomLabel();return true;
+    }catch(e){return false}
+}
+function clearState(){
+    tasks=[];nextId=1;filters={};colorByField='product';dayWidth=36;
+    $('colorBySelect').value='product';
+    localStorage.removeItem(STORAGE_KEY);
+    clearSelection();buildColorMap();renderAll();updateZoomLabel();
+}
+
+// ─── SCROLL/RESIZE/ZOOM ─────────────────────
+function setupScrollSync(){
+    let ticking=false;
+    tableBody.addEventListener('scroll',()=>{if(ticking)return;ticking=true;requestAnimationFrame(()=>{chartBody.scrollTop=tableBody.scrollTop;ticking=false})});
+    chartBody.addEventListener('scroll',()=>{if(!ticking)tableBody.scrollTop=chartBody.scrollTop;chartHeaderInner.style.transform=`translateX(-${chartBody.scrollLeft}px)`});
+}
+function setupResize(){
+    const handle=$('resizeHandle');let startX,startW;
+    handle.addEventListener('mousedown',e=>{startX=e.clientX;startW=tablePanel.offsetWidth;handle.classList.add('active');
+        const onMove=e2=>{const nw=Math.max(300,startW+e2.clientX-startX);tablePanel.style.width=nw+'px';document.documentElement.style.setProperty('--table-w',nw+'px')};
+        const onUp=()=>{handle.classList.remove('active');document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp)};
+        document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp)});
+}
+function setupRowHoverSync(){
+    tableBody.addEventListener('mouseover',e=>{const row=e.target.closest('.table-row');if(!row)return;const idx=[...tableBody.querySelectorAll('.table-row:not(.ghost-row)')].indexOf(row);highlightChartRow(idx)});
+    tableBody.addEventListener('mouseout',()=>highlightChartRow(-1));
+}
+function highlightChartRow(idx){chartCanvas.querySelectorAll('.grid-row').forEach((r,i)=>{r.style.background=i===idx?'#FEF3C7':(i%2===1?'rgba(250,251,252,.6)':'transparent')})}
+function setupZoom(){
+    $('zoomIn').addEventListener('click',()=>{dayWidth=Math.min(80,dayWidth+6);updateZoomLabel();renderChart();saveState()});
+    $('zoomOut').addEventListener('click',()=>{dayWidth=Math.max(12,dayWidth-6);updateZoomLabel();renderChart();saveState()});
+}
+function updateZoomLabel(){$('zoomLabel').textContent=Math.round(dayWidth/36*100)+'%'}
+
+// ─── RENDER ALL ──────────────────────────────
+function renderAll(){
+    calculateTimeline();buildColorMap();renderTable();renderChart();renderLegend();
+    emptyState.classList.toggle('hidden',tasks.length>0);
+}
+
+// ─── EVENT SETUP ─────────────────────────────
+function setupEvents(){
+    $('importBtn').addEventListener('click',()=>fileInput.click());
+    $('emptyImportBtn').addEventListener('click',()=>fileInput.click());
+    $('addBtn').addEventListener('click',()=>{addTask({activity:'New Task'});saveState();renderAll()});
+    $('emptyNewBtn').addEventListener('click',()=>{addTask({activity:'New Task'});saveState();renderAll()});
+    $('clearAllBtn').addEventListener('click',()=>{if(confirm('Clear all tasks, filters, and saved data?'))clearState()});
+    $('exportSvgBtn').addEventListener('click',exportToSVG);
+    $('exportPngBtn').addEventListener('click',exportToPNG);
+    $('exportCsvBtn').addEventListener('click',exportToCSV);
+    $('templateCsvBtn').addEventListener('click',downloadTemplateCSV);
+
+    $('helpBtn').addEventListener('click',toggleHelp);
+
+    $('colorBySelect').addEventListener('change',e=>{colorByField=e.target.value;buildColorMap();clearSelection();saveState();renderAll()});
+
+    fileInput.addEventListener('change',e=>{
+        const file=e.target.files[0];if(!file)return;
+        const reader=new FileReader();
+        reader.onload=ev=>{tasks=[];nextId=1;filters={};const imported=mapCSVToTasks(parseCSV(ev.target.result));imported.forEach(t=>tasks.push(t));sortByPredecessor();saveState();renderAll()};
+        reader.readAsText(file);fileInput.value='';
+    });
+
+    document.querySelectorAll('.th.filterable').forEach(th=>{
+        th.addEventListener('contextmenu',e=>showCtxMenu(e,th.dataset.field));
+    });
+    $('ctxAll').addEventListener('click',()=>{ctxList.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.checked=true);applyCtxFilter()});
+    $('ctxNone').addEventListener('click',()=>{ctxList.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.checked=false);applyCtxFilter()});
+    ctxList.addEventListener('change',applyCtxFilter);
+    document.addEventListener('mousedown',e=>{if(!ctxMenu.contains(e.target)&&!e.target.closest('.th.filterable'))hideCtxMenu()});
+
+    document.addEventListener('keydown',e=>{
+        if(e.ctrlKey&&e.key==='c'){const range=getSelRange();if(range&&(range.r1!==range.r2||range.c1!==range.c2)){handleCopy(e)}}
+        if(e.ctrlKey&&e.key==='v'){const range=getSelRange();if(range){handlePaste(e)}}
+        if(e.ctrlKey&&e.key==='d'){e.preventDefault();handleFillDown()}
+        if(e.key==='Escape'){clearSelection();hideCtxMenu();var hm=$('helpModal');if(hm&&hm.classList.contains('show'))toggleHelp()}
+    });
+
+    setupScrollSync();setupResize();setupRowHoverSync();setupZoom();
+}
+
+// ─── INIT ────────────────────────────────────
+function init(){
+    setupEvents();
+    if(!loadState()){renderAll()}
+    else{buildColorMap();renderAll()}
+}
+document.addEventListener('DOMContentLoaded',init);
+</script>
+<script src="tutorial.js"></script>
+</body>
+</html>

@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P902 Lot Browser v2 — with Automation</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/help-widget.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FAFAF8;--surface:#FFFFFF;--surface2:#F3F2EE;--surface3:#EBE9E4;
+  --text:#1A1A18;--text2:#5C5B56;--text3:#8E8D88;
+  --accent:#1B6B4A;--accent-light:#E8F5EE;--accent-dark:#0F4A32;
+  --blue:#1E40AF;--blue-light:#E8EEFB;--blue-dark:#172554;
+  --purple:#6D28D9;--purple-light:#F3EEFB;--purple-dark:#4C1D95;
+  --amber:#92400E;--amber-light:#FEF3C7;--amber-dark:#78350F;
+  --danger:#B5342E;--danger-light:#FCEEED;
+  --border:#DDD9D1;--border2:#C8C4BB;
+  --radius:10px;--radius-lg:14px;
+  --computed:#0369A1;--computed-bg:#F0F9FF;
+}
+html{font-family:'DM Sans',system-ui,sans-serif;font-size:15px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+body{min-height:100vh}
+.mono{font-family:'JetBrains Mono',monospace}
+.app{max-width:1200px;margin:0 auto;padding:2rem 1.5rem 4rem}
+.hero{text-align:center;padding:2.5rem 0 2rem;position:relative}
+.hero::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:320px;height:320px;background:radial-gradient(circle,rgba(109,40,217,.06) 0%,transparent 70%);pointer-events:none;z-index:0}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:var(--purple-light);color:var(--purple-dark);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:5px 14px;border-radius:20px;margin-bottom:1.25rem;position:relative;z-index:1}
+.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--purple);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{font-size:2.1rem;font-weight:600;letter-spacing:-.03em;line-height:1.15;margin-bottom:.6rem;position:relative;z-index:1}
+.hero p{font-size:1rem;color:var(--text2);max-width:540px;margin:0 auto;line-height:1.55;position:relative;z-index:1}
+
+.auto-badge{display:inline-flex;align-items:center;gap:4px;font-size:.6rem;font-family:'JetBrains Mono',monospace;background:var(--computed-bg);color:var(--computed);padding:1px 6px;border-radius:4px;border:1px solid #BAE6FD;vertical-align:middle;margin-left:4px;font-weight:600;letter-spacing:.02em}
+.auto-badge svg{width:9px;height:9px}
+
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:1.75rem}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1rem}
+.stat-card .stat-label{font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat-card .stat-value{font-size:1.35rem;font-weight:700;font-family:'JetBrains Mono',monospace}
+.stat-card.accent{border-color:var(--purple);background:var(--purple-light)}
+.stat-card.accent .stat-value{color:var(--purple-dark)}
+
+.tabs-wrap{position:sticky;top:0;z-index:20;background:var(--bg);padding:8px 0 0;margin-bottom:1.5rem}
+.tabs{display:flex;flex-wrap:wrap;gap:6px 4px;padding-bottom:10px;border-bottom:1.5px solid var(--border)}
+.tab-btn{padding:7px 14px;font-size:.78rem;font-weight:500;cursor:pointer;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text2);white-space:nowrap;transition:all .2s;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.tab-btn:hover{border-color:var(--border2);color:var(--text);background:var(--surface2)}
+.tab-btn.active{color:#fff;border-color:var(--purple);background:var(--purple);box-shadow:0 2px 8px rgba(109,40,217,.18)}
+.tab-btn.active:hover{background:var(--purple-dark);border-color:var(--purple-dark)}
+.tab-count{font-size:.65rem;font-family:'JetBrains Mono',monospace;background:rgba(0,0,0,.06);padding:1px 6px;border-radius:6px;margin-left:1px}
+.tab-btn.active .tab-count{background:rgba(255,255,255,.25);color:#fff}
+@media(max-width:700px){.tab-btn{padding:6px 10px;font-size:.72rem}.tab-count{font-size:.6rem}}
+
+.tab-panel{display:none}
+.tab-panel.active{display:block;animation:fadeUp .35s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap}
+.search-box{flex:1;min-width:200px;position:relative}
+.search-box input{width:100%;padding:9px 12px 9px 36px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:.85rem;font-family:inherit;background:var(--surface);color:var(--text);transition:border-color .2s}
+.search-box input:focus{outline:none;border-color:var(--purple)}
+.search-box svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text3)}
+.export-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text2);font-size:.78rem;font-weight:500;cursor:pointer;font-family:inherit;transition:all .2s}
+.export-btn:hover{border-color:var(--purple);color:var(--purple);background:var(--purple-light)}
+.export-btn svg{width:14px;height:14px}
+
+.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1.5rem;max-height:560px;overflow-y:auto}
+.data-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.data-table th{text-align:left;padding:10px 12px;font-weight:600;color:var(--text3);border-bottom:1.5px solid var(--border);font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;background:var(--surface2);position:sticky;top:0;cursor:pointer;user-select:none;z-index:2}
+.data-table th:hover{color:var(--text)}
+.data-table th .sort-icon{display:inline-block;margin-left:4px;opacity:.3;font-size:.6rem}
+.data-table th.sorted .sort-icon{opacity:1;color:var(--purple)}
+.data-table td{padding:8px 12px;border-bottom:1px solid var(--surface2);font-family:'JetBrains Mono',monospace;font-size:.75rem;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.data-table td:first-child{font-family:'DM Sans',sans-serif;font-weight:500;font-size:.82rem}
+.data-table tr:hover td{background:var(--surface2)}
+.data-table td.computed{color:var(--computed);background:var(--computed-bg);font-weight:500;position:relative}
+.data-table td.computed::before{content:'ƒ';position:absolute;top:2px;right:3px;font-size:.55rem;opacity:.4;font-style:italic}
+
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:1.5rem}
+@media(max-width:700px){.chart-row{grid-template-columns:1fr}}
+.chart-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1rem}
+.chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px}
+.chart-title{font-size:.9rem;font-weight:600}
+.chart-container{position:relative;width:100%;height:280px}
+
+.formula-panel{background:var(--computed-bg);border:1px solid #BAE6FD;border-radius:var(--radius-lg);padding:1rem 1.25rem;margin-bottom:1.25rem}
+.formula-panel h4{font-size:.82rem;font-weight:600;color:var(--computed);margin-bottom:.5rem;display:flex;align-items:center;gap:6px}
+.formula-panel h4 svg{width:14px;height:14px}
+.formula-list{display:flex;flex-wrap:wrap;gap:6px}
+.formula-chip{font-family:'JetBrains Mono',monospace;font-size:.68rem;background:#fff;border:1px solid #BAE6FD;padding:3px 8px;border-radius:6px;color:var(--computed)}
+
+.xref-badge{display:inline-flex;align-items:center;gap:3px;font-size:.6rem;background:#FEF3C7;color:var(--amber);padding:1px 5px;border-radius:3px;border:1px solid #FDE68A;font-family:'JetBrains Mono',monospace;cursor:help}
+
+.add-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:var(--radius);border:1.5px solid var(--purple);background:var(--purple);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap}
+.add-btn:hover{background:var(--purple-dark)}
+.add-btn svg{width:14px;height:14px}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);padding:2rem;width:90%;max-width:680px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.15);animation:modalIn .3s ease}
+@keyframes modalIn{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.modal h3{font-size:1.1rem;font-weight:600;margin-bottom:.4rem;display:flex;align-items:center;gap:8px}
+.modal h3 .badge{font-size:.68rem;font-family:'JetBrains Mono',monospace;background:var(--purple-light);color:var(--purple-dark);padding:2px 8px;border-radius:8px}
+.modal-subtitle{font-size:.78rem;color:var(--text3);margin-bottom:1.25rem;line-height:1.4}
+.modal-subtitle .auto-count{font-family:'JetBrains Mono',monospace;color:var(--computed);font-weight:600}
+.modal-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:3px}
+.field.full{grid-column:1/-1}
+.field label{font-size:.72rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.03em}
+.field input,.field textarea,.field select{padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--surface);color:var(--text);transition:border-color .2s}
+.field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--purple)}
+.field textarea{resize:vertical;min-height:60px;font-family:'JetBrains Mono',monospace;font-size:.78rem}
+.field-computed{display:flex;flex-direction:column;gap:3px}
+.field-computed label{font-size:.72rem;font-weight:600;color:var(--computed);text-transform:uppercase;letter-spacing:.03em}
+.field-computed .preview{padding:8px 10px;border:1.5px dashed #BAE6FD;border-radius:8px;background:var(--computed-bg);color:var(--computed);font-family:'JetBrains Mono',monospace;font-size:.8rem;min-height:36px;display:flex;align-items:center;gap:6px}
+.field-computed .preview svg{width:12px;height:12px;flex-shrink:0;opacity:.5}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border)}
+.btn-cancel{padding:9px 18px;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text2);font-size:.82rem;font-weight:500;cursor:pointer;font-family:inherit}
+.btn-cancel:hover{border-color:var(--text3);color:var(--text)}
+.btn-save{padding:9px 22px;border-radius:var(--radius);border:none;background:var(--purple);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit}
+.btn-save:hover{background:var(--purple-dark)}
+
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:var(--radius);background:var(--purple-dark);color:#fff;font-size:.85rem;font-weight:500;z-index:200;transform:translateY(80px);opacity:0;transition:all .35s cubic-bezier(.22,1,.36,1)}
+.toast.show{transform:translateY(0);opacity:1}
+
+.fade-in{animation:fadeUp .5s ease both}
+.stagger-1{animation-delay:.05s}.stagger-2{animation-delay:.1s}.stagger-3{animation-delay:.15s}
+
+.legend-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem}
+.legend-panel summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--text2);list-style:none;user-select:none;display:flex;align-items:center;gap:8px}
+.legend-panel summary::-webkit-details-marker{display:none}
+.legend-panel summary::before{content:'▸';font-size:.75rem;transition:transform .2s;display:inline-block;width:12px}
+.legend-panel[open] summary::before{transform:rotate(90deg)}
+.legend-body{padding-top:1rem;font-size:.82rem;color:var(--text2);line-height:1.6}
+.legend-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-top:.5rem}
+.legend-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border-radius:8px}
+.legend-item .code{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:.78rem;color:var(--purple);min-width:30px}
+.legend-item .desc{font-size:.78rem;color:var(--text)}
+
+.gl-panel{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem}
+.gl-panel summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--text2);display:flex;align-items:center;gap:8px;list-style:none;user-select:none}
+.gl-panel summary::-webkit-details-marker{display:none}
+.gl-panel summary::before{content:'▸';font-size:.75rem;transition:transform .2s;display:inline-block;width:12px}
+.gl-panel[open] summary::before{transform:rotate(90deg)}
+.gl-panel summary .gl-icon{width:32px;height:32px;border-radius:8px;background:var(--purple-light);color:var(--purple);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.gl-panel summary .gl-tag{font-size:.65rem;font-family:'JetBrains Mono',monospace;background:var(--accent-light);color:var(--accent-dark);padding:2px 8px;border-radius:6px}
+.gl-panel summary .gl-tag.disconnected{background:var(--surface2);color:var(--text3)}
+.gl-panel .gl-body{padding-top:1rem}
+.gl-panel .gl-desc{font-size:.8rem;color:var(--text2);margin-bottom:1rem;line-height:1.5}
+.gl-row{display:flex;gap:10px}
+.gl-row .gl-field:first-child{flex:2}
+.gl-row .gl-field:last-child{flex:1}
+.gl-field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.gl-field label{font-size:.7rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.03em}
+.gl-hint{font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:.68rem}
+.gl-field input{padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.8rem;background:var(--surface);color:var(--text);transition:border-color .2s}
+.gl-field input:focus{outline:none;border-color:var(--purple)}
+.gl-field input::placeholder{color:var(--text3);font-weight:400}
+.gl-clear-btn{font-size:.7rem;padding:4px 10px;border:1px solid var(--danger);border-radius:6px;background:none;color:var(--danger);cursor:pointer;font-family:inherit;transition:all .2s}
+.gl-clear-btn:hover{background:var(--danger-light)}
+.gl-status{margin-top:.75rem;font-size:.8rem;padding:.6rem 1rem;border-radius:var(--radius);display:none}
+.gl-status.show{display:block}
+.gl-status.ok{background:var(--accent-light);color:var(--accent-dark);border:1px solid #A7F3D0}
+.gl-status.err{background:var(--danger-light);color:var(--danger);border:1px solid #FECACA}
+.gl-status.info{background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid #BFDBFE;border-top-color:#2563EB;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.home-btn{
+  position:fixed;top:16px;right:160px;z-index:50;
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border-radius:10px;
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text2);font-size:.78rem;font-weight:500;
+  text-decoration:none;font-family:inherit;
+  transition:all .25s;box-shadow:0 2px 8px rgba(0,0,0,.04);
+}
+.home-btn:hover{border-color:var(--purple);color:var(--purple);background:var(--purple-light);box-shadow:0 4px 12px rgba(109,40,217,.08)}
+.home-btn svg{width:14px;height:14px;flex-shrink:0}
+
+
+</style>
+</head>
+<body>
+<a class="home-btn" href="index.html">
+  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
+  Toolkit home
+</a>
+<div class="app">
+  <div class="hero fade-in">
+    <div class="hero-badge"><span class="dot"></span> Lot management + automation</div>
+    <h1>P902 Lot Browser</h1>
+    <p>All lot records with <strong>live formula computation</strong> — concatenations, IF statements, cross-sheet lookups, expiry calculations, and volume math run in real-time.</p>
+  </div>
+
+  <div class="stats-row fade-in stagger-1" id="statsRow"></div>
+
+  <details class="legend-panel fade-in stagger-2" id="legendPanel">
+    <summary>
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+      Lot naming legend & formula key
+    </summary>
+    <div class="legend-body">
+      <div class="legend-grid" id="legendGrid"></div>
+      <p style="margin-top:12px"><span class="auto-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>AUTO</span> = computed live from other fields &nbsp; <span class="xref-badge">XREF</span> = pulled from another sheet</p>
+    </div>
+  </details>
+
+  <details class="gl-panel fade-in stagger-2" id="glPanel">
+    <summary>
+      <span class="gl-icon"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg></span>
+      GitLab connection
+      <span class="gl-tag disconnected" id="glTag">not configured</span>
+    </summary>
+    <div class="gl-body">
+      <p class="gl-desc">Connect to your GitLab repo so new entries get committed directly to <code>data/lots/</code>. The CI pipeline rebuilds the database automatically after each push.</p>
+      <div class="gl-row">
+        <div class="gl-field">
+          <label>Repository</label>
+          <input type="text" id="glProject" placeholder="e.g. owner/repo-name" spellcheck="false">
+        </div>
+        <div class="gl-field">
+          <label>Branch</label>
+          <input type="text" id="glBranch" value="main" spellcheck="false">
+        </div>
+      </div>
+      <div class="gl-field">
+        <label>Personal access token <span class="gl-hint">(repo scope — stored in your browser only)</span></label>
+        <div style="display:flex;gap:8px">
+          <input type="password" id="glToken" placeholder="ghp_xxxxxxxxxxxx" spellcheck="false" style="flex:1">
+          <button class="export-btn" onclick="toggleTokenVis()" id="toggleTok" style="font-size:.7rem;padding:6px 10px">Show</button>
+          <button class="gl-clear-btn" onclick="clearGLSettings()">Clear</button>
+        </div>
+      </div>
+      <div class="gl-status" id="glStatus"></div>
+    </div>
+  </details>
+
+  <div class="tabs-wrap fade-in stagger-2"><div class="tabs" id="tabBar"></div></div>
+  <div id="panels"></div>
+</div>
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modal">
+    <h3 id="modalTitle">Add Entry</h3>
+    <p class="modal-subtitle" id="modalSubtitle"></p>
+    <div class="modal-fields" id="modalFields"></div>
+    <div id="modalPreviews"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  DATA — embedded directly from Excel (non-null rows only)
+// ═══════════════════════════════════════════════════════════
+
+const SHEETS = {
+  fermentation: {
+    label: 'Fermentation', color: 'var(--accent)',
+    csvFile: 'fermentation.csv',
+    csvHeaders: ['num','date','fermenter_num','fte','strain','sop','br_batching_sheet','eln','fermenter_lot_num','notes','use_for_experiment_production','lysate_lot','harvested_pellet_g'],
+    headerRow: 2, dataStart: 3,
+    headers: ['#','Date','Fermenter #','FTE','Strain','SOP','BR/Batching Sheet','ELN','Fermenter Lot #','Notes','Use','Lysate Lot','Harvested Pellet (g)'],
+    data: [],
+    computedCols: {8: {name:'Fermenter Lot #', formula: 'CONCAT(Date,"-",#,"-",Fermenter #)', fn: (r)=> r[1]+'-'+r[0]+'-'+r[2]}},
+  },
+
+  lysate: {
+    label: 'Lysate', color: 'var(--accent)',
+    csvFile: 'lysate.csv',
+    csvHeaders: ['num','fte','date','lysis_sop','batch_record','lysis_lot_number','fermentation_lot','starting_lysate_volume_ml','resuspension_ratio_ml_-_buffer:g_-_pellet','lims_id','kglu_mm','mgglu_mm','cfu_count','abs_quant_plasmid_g_l','abs_quant_plasmid_cv_pct','approximate_data_source_link','abs_quant_linear_g_l','abs_quant_linear_-_cv_pct','approximate_data_source_link.1','solubility_pct','solubility_error_cvpct','approximate_data_source_link.2','salt_optimization_experiment_file','use'],
+    headers: ['#','FTE','Date','Lysis SOP','Batch Record','Lysis Lot Number','Fermentation Lot','Starting Volume (mL)','Resuspension Ratio','LIMS ID','KGlu (mM)','MgGlu (mM)','CFU Count','ABS Quant Plasmid','ABS Quant Plasmid CV%','Data source','ABS Quant Linear','ABS Linear CV%','Data source','Solubility %','Sol Error cv%','Data source','Salt Opt file','Use'],
+    data: [],
+    computedCols: {5: {name:'Lysis Lot Number', formula:'CONCAT(Date,"-",#,"-L") or IF(Date="","",CONCAT(Date,"-L-",#))', fn:(r)=>{
+      const d=r[2], n=r[0]; if(!d) return '';
+      if(typeof n==='number' && n>=22) return d+'-L-'+n;
+      return d+'-'+n+'-L';
+    }}},
+  },
+
+  mastermix: {
+    label: 'Mastermix', color: 'var(--accent)',
+    csvFile: 'mastermix.csv',
+    csvHeaders: ['num','date_yymmdd','fte','batching_sheet_link','prepared_for','volume_created_ml','paired_lysate_lot','sop_used','lot_number','lot_num__+_description','kglu_mm','mgglu2_mm','type','assumed_expiry','comments'],
+    headers: ['#','Date','FTE','Batching Sheet','Prepared for','Volume (mL)','Paired Lysate','SOP','Lot Number','Lot # + Description','K(Glu)','Mg(Glu)2','Type','Assumed Expiry','Comments'],
+    data: [],
+    computedCols: {
+      8: {name:'Lot Number', formula:'CONCAT(Date,"-",#,"-MM",IF(Type))', fn:(r)=>{
+        const d=r[1], n=r[0], t=String(r[12]||'').toLowerCase();
+        let suffix='';
+        if(t==='none')suffix='-A'; else if(t==='brij')suffix='-B';
+        else if(t==='concentrate')suffix='-C'; else if(t==='economy')suffix='-D';
+        else if(t==='so')suffix='-SO';
+        return d+'-'+n+'-MM'+suffix;
+      }},
+      9: {name:'Lot # + Description', formula:'CONCAT(LotNum," for ",Lysate)', fn:(r,computed)=>{
+        const lot=computed[8]; const lys=r[6]||'';
+        if(r[0]>=19 && lys) return lot+' for '+lys;
+        return lot;
+      }},
+      13: {name:'Assumed Expiry', formula:'Date + 365 days', fn:(r)=>{
+        const d=String(r[1]);
+        if(!d||d.length!==8||isNaN(d)) return '';
+        try {
+          const y=parseInt(d.slice(0,4)), m=parseInt(d.slice(4,6))-1, day=parseInt(d.slice(6,8));
+          const dt=new Date(y,m,day); dt.setDate(dt.getDate()+365);
+          return String(dt.getFullYear())+String(dt.getMonth()+1).padStart(2,'0')+String(dt.getDate()).padStart(2,'0');
+        } catch(e){return '';}
+      }},
+    },
+  },
+
+  solubility_enhancer: {
+    label: 'Sol. Enhancer', color: 'var(--purple)',
+    csvFile: 'solubility_enhancer.csv',
+    csvHeaders: ['num','date_yymmdd','fte','lot','prepared_for','volume_per_tube_ml','num_tubes','total_volume','type','assumed_expiry','comments'],
+    headers: ['#','Date (YYMMDD)','FTE','Lot','Prepared for','Vol/tube (mL)','# Tubes','Total Volume','Type','Assumed Expiry','Comments'],
+    data: [],
+    computedCols: {
+      3: {name:'Lot', formula:'CONCAT(Date,"-GR012-",#)', fn:(r)=>r[1]+'-GR012-'+r[0]},
+      7: {name:'Total Volume', formula:'Vol/tube × # Tubes', fn:(r)=>{const v=r[5],t=r[6]; return (v&&t)?v*t:''}},
+      9: {name:'Assumed Expiry', formula:'Date + 182 days', fn:(r)=>{
+        const d=String(r[1]); if(!d||d.length!==8) return '';
+        try{const y=parseInt(d.slice(0,4)),m=parseInt(d.slice(4,6))-1,day=parseInt(d.slice(6,8));
+        const dt=new Date(y,m,day);dt.setDate(dt.getDate()+182);
+        return String(dt.getFullYear())+String(dt.getMonth()+1).padStart(2,'0')+String(dt.getDate()).padStart(2,'0');}catch(e){return '';}
+      }},
+    },
+  },
+
+  premix: {
+    label: 'Premix', color: 'var(--purple)',
+    csvFile: 'premix.csv',
+    csvHeaders: ['num','date_yymmdd','fte','ratio_of_lysate:_mastermix','prepared_for','volume_created_ml','paired_lysate_lot','paired_mastermix_lot','unique_lot_number','lot_num__+_description'],
+    headers: ['#','Date','FTE','Ratio','Prepared for','Volume (mL)','Paired Lysate','Paired MM','Unique Lot Number','Lot # + Desc'],
+    data: [],
+    computedCols: {
+      8: {name:'Unique Lot Number', formula:'CONCAT(Date,"-",#,"-PM")', fn:(r)=>r[1]+'-'+r[0]+'-PM'},
+    },
+  },
+
+  plasmid: {
+    label: 'Plasmid', color: 'var(--purple)',
+    csvFile: 'plasmid.csv',
+    csvHeaders: ['plasmid','fte','date','sop','eln','batch_record','plasmid_lot_number','lot_number_of_azenta_stock','azenta_concentration_listed_-_ng_ul','azenta_concentration_nanodrop_-_ng_ul','volume_azenta_stock_ul','volume_water','final_concentration_nanodrop_-_ng_ul','final_concentration_-_nm'],
+    headers: ['Plasmid','FTE','Date','SOP','ELN','Batch Record','Lot Number','Azenta Lot','Azenta conc (listed)','Azenta conc (nanodrop)','Vol Azenta (uL)','Vol water','Final conc (nanodrop)','Final conc (nM)'],
+    data: [],
+    computedCols: {
+      6: {name:'Lot Number', formula:'CONCAT(Date,"-",#,"-P")', fn:(r)=>r[2]+'-'+r[0]+'-P'},
+      13: {name:'Final conc (nM)', formula:'conc_ng_uL / 1936400 × 1e6', fn:(r)=>{const c=r[12]; return c?(c/1936400*1e6).toFixed(2):'';}},
+    },
+  },
+
+  std_curves: {
+    label: 'Std Curves', color: 'var(--blue)',
+    csvFile: 'std_curves.csv',
+    csvHeaders: ['num','date_of_prep_yyyymmdd','operator','eln','test_experiment','sop__planning_gsheet','fluorescence_protein','aliquot_volume_ul','total_nº_of_pcr_strips_1_strip_=_1_std_curve','qc_-_r2','slope','y-_intercept','storage_location','range','comments','unnamed:_15'],
+    headers: ['#','Date','Operator','ELN','Test Experiment','SOP/gsheet','Fluorescence protein','Aliquot vol (µL)','PCR strips','QC - R²','Slope','Y-intercept','Storage','Range','Comments'],
+    data: [],
+    computedCols: {},
+  },
+
+  controls: {
+    label: 'Controls', color: 'var(--blue)',
+    csvFile: 'controls.csv',
+    csvHeaders: ['num','date_of_prep_yyyymmdd','operator','eln','fluorescence_protein','aliquot_volume_ul','total_volume_ul','storage_location','notes','run1_-_e61','run2-e75','run3-e78','run4-e104','run5'],
+    headers: ['#','Date','Operator','ELN','Fluor. protein','Aliquot Vol (uL)','Total Vol (uL)','Storage','Notes','Run1-E61','Run2-E75','Run3-E78','Run4-E104','Run5'],
+    data: [],
+    computedCols: {},
+  },
+
+  cf_product: {
+    label: 'CF Product', color: 'var(--accent)',
+    csvFile: 'cf_product.csv',
+    csvHeaders: ['seq_num','date_yymm','date_dd','lysate_lot','so_mm_lot_a','so_mm_lot_b','mscarlett_lot','reaction_volume_ml','kits_1ml','kits_10ml','kits_100ml','version','lot_number','product_version','cf_size1','cf_size2','cf_size3','expiry_date','internal','labels_1ml','labels_10ml','labels_100ml','coa','old_lot_number','plasmid'],
+    headers: ['Seq #','Date (YYMM)','Date (DD)','Lysate Lot','SO MM Lot','SO MM Lot 2','mScarlett Lot','Rxn Vol (mL)','# Kits 1mL','# Kits 10mL','# Kits 100mL','Version','Lot Number','Product Version','CF001/CF011/CF101','CF002/CF012/CF102','CF003/CF013/CF103','Expiry Date','Internal','1mL labels','10mL labels'],
+    data: [],
+    // Dropdown fields: col index → {source sheet key, source col index (use computed value)}
+    dropdownFields: {
+      3:  {sourceSheet: 'lysate',   sourceCol: 5, label: 'Lysate Lot'},
+      4:  {sourceSheet: 'mastermix', sourceCol: 8, label: 'MM Lot'},
+      5:  {sourceSheet: 'mastermix', sourceCol: 8, label: 'MM Lot'},
+      6:  {sourceSheet: 'plasmid',  sourceCol: 6, label: 'Plasmid/mScarlett Lot'},
+    },
+    computedCols: {
+      12: {name:'Lot Number', formula:'IF(Date="","",CONCAT("CF-",Date,"-",Version,"-",Seq#))', fn:(r)=>{
+        const d=r[1],v=r[11],s=r[0]; if(!d) return '';
+        return 'CF-'+d+'-'+v+'-'+s;
+      }},
+    },
+  },
+
+  pre_so_mm: {
+    label: 'Pre-SO MM', color: 'var(--amber)',
+    csvFile: 'pre_so_mm.csv',
+    csvHeaders: ['date_yymmdd','fte','batching_sheet_link','eln','volume_created_ml','lysates_optimized','sop_used','use','experiment_number','lot_name'],
+    headers: ['Date','FTE','Batching Sheet','ELN','Volume (mL)','Lysates Optimized','SOP','Use','Experiment #','Lot name'],
+    data: [],
+    computedCols: {},
+  },
+
+  delivered: {
+    label: 'Delivered Material', color: 'var(--amber)',
+    csvFile: 'delivered_material.csv',
+    csvHeaders: ['reagent','2025_openai','2025_dp','2025_biofab','2025_other','2026_openai','2026_dp','2026_biofab','2026_other','2026_proj_openai','2026_proj_dp','2026_proj_biofab','2026_proj_other'],
+    headers: ['Reagent','2025 OpenAI','2025 DP','2025 Biofab','2025 Other','2026 OpenAI','2026 DP','2026 Biofab','2026 Other','2026 Proj OpenAI','2026 Proj DP','2026 Proj Biofab','2026 Proj Other'],
+    data: [],
+    computedCols: {},
+  },
+};
+
+// ═══════════════════════════════════════════════════════════
+//  LEGEND DATA
+// ═══════════════════════════════════════════════════════════
+const LEGEND = [
+  {code:'MM',desc:'Master Mix (Pre Salt)'},
+  {code:'SO',desc:'Salt Optimized Master Mix'},
+  {code:'L',desc:'Lysate'},
+  {code:'CV',desc:'Cryovial/Seed'},
+  {code:'GP',desc:'GFP Plasmid'},
+  {code:'GC',desc:'GFP Control'},
+  {code:'PM',desc:'Premix'},
+  {code:'P',desc:'Plasmid'},
+  {code:'RM',desc:'Reaction Mix'},
+  {code:'-A',desc:'MM Type: None/Standard'},
+  {code:'-B',desc:'MM Type: Brij'},
+  {code:'-C',desc:'MM Type: Concentrate'},
+  {code:'-D',desc:'MM Type: Economy'},
+  {code:'-SO',desc:'MM Type: Salt Optimized'},
+];
+
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+const sheetKeys = Object.keys(SHEETS);
+let activeTab = sheetKeys[0];
+let sortState = {};
+let searchTerms = {};
+let chartInstances = {};
+
+// ═══════════════════════════════════════════════════════════
+//  COMPUTED DATA — apply formulas
+// ═══════════════════════════════════════════════════════════
+function computeRow(sheet, row) {
+  const computed = {};
+  const cc = sheet.computedCols || {};
+  // Two-pass: some computed cols depend on others
+  for (const ci of Object.keys(cc).sort((a,b)=>a-b)) {
+    computed[ci] = cc[ci].fn(row, computed);
+  }
+  return computed;
+}
+
+function getProcessedRows(key) {
+  const sheet = SHEETS[key];
+  return sheet.data.map(row => {
+    const computed = computeRow(sheet, row);
+    const out = [...row];
+    for (const ci of Object.keys(computed)) {
+      out[ci] = computed[ci];
+    }
+    return {raw: row, display: out, computedIndices: Object.keys(computed).map(Number)};
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderLegend() {
+  document.getElementById('legendGrid').innerHTML = LEGEND.map(l =>
+    '<div class="legend-item"><span class="code">'+esc(l.code)+'</span><span class="desc">'+esc(l.desc)+'</span></div>'
+  ).join('');
+}
+
+function renderStats() {
+  const el = document.getElementById('statsRow');
+  const stats = sheetKeys.slice(0,4).map(k => ({label: SHEETS[k].label, value: SHEETS[k].data.length}));
+  const total = sheetKeys.reduce((s,k) => s + SHEETS[k].data.length, 0);
+  const formulaCount = sheetKeys.reduce((s,k) => {
+    const cc = Object.keys(SHEETS[k].computedCols||{}).length;
+    return s + cc * SHEETS[k].data.length;
+  }, 0);
+  stats.push({label:'Total Lots', value: total, accent: true});
+  stats.push({label:'Live Formulas', value: formulaCount, accent: false, computed: true});
+  el.innerHTML = stats.map(s =>
+    '<div class="stat-card'+(s.accent?' accent':'')+'">'+
+    '<div class="stat-label">'+esc(s.label)+(s.computed?' <span class="auto-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>AUTO</span>':'')+'</div>'+
+    '<div class="stat-value">'+s.value+'</div></div>'
+  ).join('');
+}
+
+function renderTabs() {
+  const el = document.getElementById('tabBar');
+  el.innerHTML = sheetKeys.map(k => {
+    const s = SHEETS[k];
+    const active = k===activeTab?' active':'';
+    return '<button class="tab-btn'+active+'" data-tab="'+k+'">'+esc(s.label)+
+      '<span class="tab-count">'+s.data.length+'</span></button>';
+  }).join('');
+  el.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.onclick = () => switchTab(btn.dataset.tab);
+  });
+}
+
+function renderPanels() {
+  const el = document.getElementById('panels');
+  el.innerHTML = sheetKeys.map(k => {
+    const s = SHEETS[k];
+    const active = k===activeTab?' active':'';
+    const hasFormulas = Object.keys(s.computedCols||{}).length > 0;
+    let formulaHTML = '';
+    if (hasFormulas) {
+      const chips = Object.entries(s.computedCols).map(([ci,c]) =>
+        '<span class="formula-chip" title="'+esc(c.formula)+'">'+esc(s.headers[ci])+' = '+esc(c.formula)+'</span>'
+      ).join('');
+      formulaHTML = '<div class="formula-panel"><h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>Live computed columns</h4><div class="formula-list">'+chips+'</div></div>';
+    }
+    return '<div class="tab-panel'+active+'" id="panel-'+k+'">'+
+      '<div class="toolbar">'+
+      '<div class="search-box">'+
+      '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'+
+      '<input type="text" placeholder="Search '+esc(s.label.toLowerCase())+'…" oninput="onSearch(\''+k+'\',this.value)">'+
+      '</div>'+
+      '<button class="add-btn" onclick="openModal(\''+k+'\')">'+
+      '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Add entry</button>'+
+      '<button class="export-btn" onclick="exportCSV(\''+k+'\')">'+
+      '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</button>'+
+      '</div>'+
+      formulaHTML+
+      '<div class="chart-row" id="charts-'+k+'"></div>'+
+      '<div class="table-wrap" id="tableWrap-'+k+'"></div>'+
+      '</div>';
+  }).join('');
+  sheetKeys.forEach(k => renderTable(k));
+}
+
+function renderTable(key) {
+  const wrap = document.getElementById('tableWrap-'+key);
+  const sheet = SHEETS[key];
+  const term = (searchTerms[key]||'').toLowerCase();
+  const ss = sortState[key];
+  let rows = getProcessedRows(key);
+
+  if (term) {
+    rows = rows.filter(r => r.display.some(c => c!==null && String(c).toLowerCase().includes(term)));
+  }
+  if (ss) {
+    rows.sort((a,b) => {
+      let va = a.display[ss.col], vb = b.display[ss.col];
+      if (va===null||va===undefined) va='';
+      if (vb===null||vb===undefined) vb='';
+      const na=Number(va), nb=Number(vb);
+      if (!isNaN(na)&&!isNaN(nb)) return ss.asc? na-nb : nb-na;
+      return ss.asc? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+  }
+
+  const cc = new Set(Object.keys(sheet.computedCols||{}).map(Number));
+  let html = '<table class="data-table"><thead><tr>';
+  sheet.headers.forEach((h,i) => {
+    const sorted = ss && ss.col===i;
+    const arrow = sorted ? (ss.asc?'▲':'▼') : '⇅';
+    const autoTag = cc.has(i) ? ' <span class="auto-badge" style="vertical-align:middle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>' : '';
+    html += '<th class="'+(sorted?'sorted':'')+'" onclick="sortColumn(\''+key+'\','+i+')">'+
+      esc(h)+autoTag+'<span class="sort-icon">'+arrow+'</span></th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  if (!rows.length) {
+    html += '<tr><td colspan="'+sheet.headers.length+'" style="text-align:center;color:var(--text3);font-style:italic;padding:2rem;font-family:DM Sans">No entries found</td></tr>';
+  } else {
+    rows.forEach(r => {
+      html += '<tr>';
+      r.display.forEach((cell,i) => {
+        if (i >= sheet.headers.length) return;
+        let v = cell===null||cell===undefined ? '' : String(cell);
+        const isComputed = r.computedIndices.includes(i);
+        const trunc = v.length > 50;
+        const cls = isComputed ? ' class="computed"' : '';
+        html += '<td'+cls+(trunc?' title="'+esc(v).replace(/"/g,'&quot;')+'"':'')+'>'+
+          esc(trunc ? v.substring(0,48)+'…' : v)+'</td>';
+      });
+      html += '</tr>';
+    });
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function switchTab(name) {
+  activeTab = name;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab===name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id==='panel-'+name));
+  buildCharts(name);
+}
+
+function onSearch(key, val) { searchTerms[key] = val; renderTable(key); }
+function sortColumn(key, ci) {
+  const ss = sortState[key];
+  sortState[key] = (ss && ss.col===ci) ? {col:ci,asc:!ss.asc} : {col:ci,asc:true};
+  renderTable(key);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CHARTS
+// ═══════════════════════════════════════════════════════════
+const PALETTE = ['#6D28D9','#1B6B4A','#1E40AF','#92400E','#B5342E','#0F766E','#9333EA','#C2410C'];
+
+function buildCharts(key) {
+  Object.values(chartInstances).forEach(c => c.destroy());
+  chartInstances = {};
+  const el = document.getElementById('charts-'+key);
+  if (!el) return;
+  el.innerHTML = '';
+  const sheet = SHEETS[key];
+  if (sheet.data.length < 2) return;
+
+  // Find categorical & numeric columns
+  const catCols = [];
+  const numCols = [];
+  sheet.headers.forEach((h,i) => {
+    const lh = h.toLowerCase();
+    if (/strain|type|protein|fluor|reagent|product|version|fte|operator|use/i.test(lh)) catCols.push(i);
+    if (/volume|count|pellet|aliquot|kits|tubes|r2|slope|conc|sol/i.test(lh)) numCols.push(i);
+  });
+
+  let n = 0;
+  if (catCols.length) {
+    const ci = catCols[0];
+    const counts = {};
+    sheet.data.forEach(r => { const v = r[ci]; if(v && String(v).trim()) counts[v] = (counts[v]||0)+1; });
+    const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    if (entries.length > 1) {
+      const id = 'ch-'+key+'-cat';
+      el.innerHTML += '<div class="chart-panel"><div class="chart-header"><span class="chart-title">'+esc(sheet.headers[ci])+' distribution</span></div><div class="chart-container"><canvas id="'+id+'"></canvas></div></div>';
+      setTimeout(()=>{
+        chartInstances[id] = new Chart(document.getElementById(id),{
+          type:'doughnut', data:{labels:entries.map(e=>e[0]),datasets:[{data:entries.map(e=>e[1]),backgroundColor:PALETTE.slice(0,entries.length),borderWidth:2,borderColor:'#fff'}]},
+          options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10}}},cutout:'58%'}
+        });
+      },50);
+      n++;
+    }
+  }
+
+  if (numCols.length) {
+    const ci = numCols[0];
+    const dateCi = sheet.headers.findIndex(h => /date/i.test(h));
+    const labelCi = dateCi>=0 ? dateCi : 0;
+    const vals = sheet.data.filter(r => r[ci]!==null && r[ci]!=='' && !isNaN(Number(r[ci]))).map(r => [String(r[labelCi]).substring(0,10), Number(r[ci])]);
+    if (vals.length > 1) {
+      const id = 'ch-'+key+'-num';
+      el.innerHTML += '<div class="chart-panel"><div class="chart-header"><span class="chart-title">'+esc(sheet.headers[ci])+'</span></div><div class="chart-container"><canvas id="'+id+'"></canvas></div></div>';
+      setTimeout(()=>{
+        chartInstances[id] = new Chart(document.getElementById(id),{
+          type:'bar', data:{labels:vals.map(v=>v[0]),datasets:[{label:sheet.headers[ci],data:vals.map(v=>v[1]),backgroundColor:'rgba(109,40,217,.6)',borderRadius:4,borderSkipped:false}]},
+          options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true},x:{ticks:{font:{size:9},maxRotation:55}}}}
+        });
+      },50);
+      n++;
+    }
+  }
+
+  if (n<2) el.style.gridTemplateColumns='1fr'; else el.style.gridTemplateColumns='';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EXPORT
+// ═══════════════════════════════════════════════════════════
+function exportCSV(key) {
+  const sheet = SHEETS[key];
+  const rows = getProcessedRows(key);
+  let csv = sheet.headers.map(h => '"'+h+'"').join(',')+'\n';
+  rows.forEach(r => {
+    csv += r.display.slice(0, sheet.headers.length).map(v => v===null?'':'"'+String(v).replace(/"/g,'""')+'"').join(',')+'\n';
+  });
+  const blob = new Blob([csv],{type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = key+'_lots.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('Exported '+sheet.label+' as CSV (with computed values)');
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MODAL — Add Entry (only manual fields, auto-preview computed)
+// ═══════════════════════════════════════════════════════════
+let currentModalTab = null;
+
+function getManualIndices(key) {
+  const sheet = SHEETS[key];
+  const cc = new Set(Object.keys(sheet.computedCols||{}).map(Number));
+  const manual = [];
+  sheet.headers.forEach((h,i) => { if (!cc.has(i)) manual.push(i); });
+  return manual;
+}
+
+function openModal(key) {
+  currentModalTab = key;
+  const sheet = SHEETS[key];
+  const cc = sheet.computedCols || {};
+  const ccKeys = Object.keys(cc).map(Number);
+  const manualIndices = getManualIndices(key);
+
+  document.getElementById('modalTitle').innerHTML = 'Add Entry <span class="badge">'+esc(sheet.label)+'</span>';
+
+  const autoCount = ccKeys.length;
+  document.getElementById('modalSubtitle').innerHTML = autoCount > 0
+    ? 'Fill in the manual fields below. <span class="auto-count">'+autoCount+' column'+(autoCount>1?'s':'')+' will be computed automatically</span> from your inputs.'
+    : 'Fill in the fields below to add a new row.';
+
+  const fields = document.getElementById('modalFields');
+  const dd = sheet.dropdownFields || {};
+  fields.innerHTML = manualIndices.map(i => {
+    const h = sheet.headers[i];
+    const isLong = /comment|note|eln|sop|link|description|sheet|batch|source/i.test(h);
+    const dropdownCfg = dd[i];
+
+    if (dropdownCfg) {
+      // Build dropdown from source sheet's live data
+      const srcSheet = SHEETS[dropdownCfg.sourceSheet];
+      const srcCol = dropdownCfg.sourceCol;
+      const srcCC = srcSheet.computedCols || {};
+      const options = new Set();
+      srcSheet.data.forEach(row => {
+        // If the source column is computed, compute it; otherwise use raw value
+        let val;
+        if (srcCC[srcCol]) {
+          const computed = computeRow(srcSheet, row);
+          val = computed[srcCol];
+        } else {
+          val = row[srcCol];
+        }
+        if (val !== null && val !== undefined && String(val).trim() !== '') options.add(String(val));
+      });
+      const sortedOpts = [...options].sort().reverse(); // newest lots first (date-prefixed)
+      return '<div class="field"><label>'+esc(h)+' <span class="xref-badge">'+esc(dropdownCfg.label)+'</span></label>'+
+        '<select id="mf-'+i+'" oninput="updateModalPreview()" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--surface);color:var(--text);cursor:pointer">'+
+        '<option value="">— select or type below —</option>'+
+        sortedOpts.map(o => '<option value="'+esc(o)+'">'+esc(o)+'</option>').join('')+
+        '</select>'+
+        '<input type="text" id="mf-'+i+'-custom" placeholder="Or type a new value…" oninput="document.getElementById(\'mf-'+i+'\').value=\'\';updateModalPreview()" style="margin-top:4px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.8rem;background:var(--surface2);color:var(--text)">'+
+        '</div>';
+    }
+
+    return '<div class="field'+(isLong?' full':'')+'"><label>'+esc(h)+'</label>'+
+      (isLong
+        ? '<textarea id="mf-'+i+'" placeholder="'+esc(h)+'" oninput="updateModalPreview()"></textarea>'
+        : '<input type="text" id="mf-'+i+'" placeholder="'+esc(h)+'" oninput="updateModalPreview()">')+
+      '</div>';
+  }).join('');
+
+  // Computed previews
+  const previews = document.getElementById('modalPreviews');
+  if (ccKeys.length) {
+    previews.innerHTML = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">' +
+      '<div style="font-size:.72rem;font-weight:600;color:var(--computed);text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px;display:flex;align-items:center;gap:5px">' +
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>Auto-computed preview</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      ccKeys.map(ci =>
+        '<div class="field-computed"><label>'+esc(sheet.headers[ci])+' <span class="auto-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>AUTO</span></label>' +
+        '<div class="preview" id="mp-'+ci+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span>waiting for input…</span></div></div>'
+      ).join('') +
+      '</div></div>';
+  } else {
+    previews.innerHTML = '';
+  }
+
+  document.getElementById('modalOverlay').classList.add('open');
+  setTimeout(() => { const f = fields.querySelector('input,textarea'); if(f) f.focus(); }, 100);
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  currentModalTab = null;
+}
+
+function buildRowFromModal() {
+  if (!currentModalTab) return null;
+  const sheet = SHEETS[currentModalTab];
+  const dd = sheet.dropdownFields || {};
+  const row = new Array(sheet.headers.length).fill(null);
+  sheet.headers.forEach((h,i) => {
+    let v = '';
+    if (dd[i]) {
+      // Dropdown field: prefer dropdown selection, fall back to custom text input
+      const selEl = document.getElementById('mf-'+i);
+      const customEl = document.getElementById('mf-'+i+'-custom');
+      const selVal = selEl ? selEl.value.trim() : '';
+      const customVal = customEl ? customEl.value.trim() : '';
+      v = customVal || selVal;
+    } else {
+      const el = document.getElementById('mf-'+i);
+      if (el) v = el.value.trim();
+    }
+    // Try to parse numbers
+    if (v !== '' && !isNaN(Number(v)) && !/^0\d/.test(v)) v = Number(v);
+    row[i] = v === '' ? null : v;
+  });
+  return row;
+}
+
+function updateModalPreview() {
+  if (!currentModalTab) return;
+  const sheet = SHEETS[currentModalTab];
+  const cc = sheet.computedCols || {};
+  const row = buildRowFromModal();
+  if (!row) return;
+  const computed = computeRow(sheet, row);
+  for (const ci of Object.keys(computed)) {
+    const el = document.getElementById('mp-'+ci);
+    if (el) {
+      const val = computed[ci];
+      if (val !== null && val !== undefined && String(val).trim() !== '') {
+        el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span style="font-weight:600">'+esc(String(val))+'</span>';
+        el.style.borderColor = '#7DD3FC';
+      } else {
+        el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span>waiting for input…</span>';
+        el.style.borderColor = '';
+      }
+    }
+  }
+}
+
+function saveEntry() {
+  if (!currentModalTab) return;
+  const key = currentModalTab;
+  const sheet = SHEETS[key];
+  const row = buildRowFromModal();
+  if (!row) return;
+
+  const hasData = row.some(v => v !== null);
+  if (!hasData) {
+    showToast('Please fill in at least one field');
+    return;
+  }
+
+  // Compute the full row (manual + auto-computed)
+  const computed = computeRow(sheet, row);
+  const fullRow = [...row];
+  for (const ci of Object.keys(computed)) fullRow[ci] = computed[ci];
+
+  // Push to in-memory data array
+  sheet.data.push(row);
+
+  closeModal();
+  renderStats();
+  renderTabs();
+  renderTable(key);
+  buildCharts(key);
+
+  // Push to GitHub if configured
+  const gl = saveGLSettings();
+  if (gl.project && gl.token) {
+    pushToGitHub(key, fullRow);
+  } else {
+    showToast('Entry added locally — configure GitHub to auto-commit');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GITLAB SETTINGS
+// ═══════════════════════════════════════════════════════════
+function loadGLSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('lot_gl_settings') || '{}');
+    if (s.project) document.getElementById('glProject').value = s.project;
+    if (s.branch) document.getElementById('glBranch').value = s.branch;
+    if (s.token) document.getElementById('glToken').value = s.token;
+    updateGLTag();
+  } catch (e) {}
+}
+function saveGLSettings() {
+  const s = {
+    project: document.getElementById('glProject').value.trim(),
+    branch: document.getElementById('glBranch').value.trim() || 'main',
+    token: document.getElementById('glToken').value.trim()
+  };
+  try { localStorage.setItem('lot_gl_settings', JSON.stringify(s)); } catch (e) {}
+  updateGLTag();
+  return s;
+}
+function clearGLSettings() {
+  try { localStorage.removeItem('lot_gl_settings'); } catch (e) {}
+  document.getElementById('glProject').value = '';
+  document.getElementById('glBranch').value = 'main';
+  document.getElementById('glToken').value = '';
+  updateGLTag();
+}
+function updateGLTag() {
+  const tag = document.getElementById('glTag');
+  const proj = document.getElementById('glProject').value.trim();
+  const tok = document.getElementById('glToken').value.trim();
+  if (proj && tok) {
+    tag.textContent = 'connected';
+    tag.className = 'gl-tag';
+  } else {
+    tag.textContent = 'not configured';
+    tag.className = 'gl-tag disconnected';
+  }
+}
+function toggleTokenVis() {
+  const inp = document.getElementById('glToken');
+  const btn = document.getElementById('toggleTok');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = 'Hide'; }
+  else { inp.type = 'password'; btn.textContent = 'Show'; }
+}
+['glProject', 'glToken'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => { saveGLSettings(); });
+});
+document.getElementById('glBranch').addEventListener('change', () => { saveGLSettings(); });
+
+// ═══════════════════════════════════════════════════════════
+//  GITHUB PUSH — append computed row to CSV in repo
+// ═══════════════════════════════════════════════════════════
+async function pushToGitHub(key, fullRow) {
+  const gl = saveGLSettings();
+  const sheet = SHEETS[key];
+  const status = document.getElementById('glStatus');
+  status.className = 'gl-status show info';
+  status.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:1.5px;vertical-align:middle;margin-right:6px"></span>Pushing to GitHub…';
+
+  try {
+    const csvFilename = sheet.csvFile || (key + '.csv');
+    const filePath = 'data/lots/' + csvFilename;
+
+    // Build the CSV row using csvHeaders column count
+    // Map display columns → CSV columns (same positional index, pad extras with empty)
+    const csvColCount = (sheet.csvHeaders || sheet.headers).length;
+    const csvVals = [];
+    for (let i = 0; i < csvColCount; i++) {
+      const v = i < fullRow.length ? fullRow[i] : null;
+      csvVals.push(v === null || v === undefined ? '' : String(v));
+    }
+
+    const csvLine = csvVals.map(v => {
+      if (v.indexOf(',') >= 0 || v.indexOf('"') >= 0 || v.indexOf('\n') >= 0)
+        return '"' + v.replace(/"/g, '""') + '"';
+      return v;
+    }).join(',');
+
+    // Fetch existing CSV from the repo to append
+    let existingCSV = '';
+    let fileSha = null;
+    try {
+      const fileResp = await fetch(
+        'https://api.github.com/repos/' + gl.project + '/contents/' +
+        encodeURIComponent(filePath) + '?ref=' + encodeURIComponent(gl.branch),
+        { headers: { 'Authorization': 'Bearer ' + gl.token, 'Accept': 'application/vnd.github.v3+json' } }
+      );
+      if (fileResp.ok) {
+        const fileData = await fileResp.json();
+        fileSha = fileData.sha;
+        existingCSV = atob(fileData.content.replace(/\n/g, ''));
+      }
+    } catch (e) { /* file doesn't exist yet, will create */ }
+
+    let newContent;
+    if (existingCSV) {
+      const trimmed = existingCSV.trimEnd();
+      newContent = trimmed + '\n' + csvLine + '\n';
+    } else {
+      const header = (sheet.csvHeaders || sheet.headers).join(',');
+      newContent = header + '\n' + csvLine + '\n';
+    }
+
+    // Commit via GitHub API
+    const commitPayload = {
+      message: '[Lot Browser] Add entry to ' + sheet.label + ' (' + csvFilename + ')',
+      content: btoa(unescape(encodeURIComponent(newContent))),
+      branch: gl.branch
+    };
+    if (fileSha) commitPayload.sha = fileSha;
+
+    const resp = await fetch('https://api.github.com/repos/' + gl.project + '/contents/' + encodeURIComponent(filePath), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + gl.token,
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      body: JSON.stringify(commitPayload)
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const sha = data.commit && data.commit.sha ? data.commit.sha.substring(0, 8) : '';
+      status.className = 'gl-status show ok';
+      status.innerHTML = '<strong>Committed</strong> — ' + esc(csvFilename) +
+        ' → <code>' + gl.branch + '</code>' +
+        (sha ? ' · <code>' + sha + '</code>' : '') +
+        '. Pipeline will rebuild the DB.';
+      showToast('Entry saved to ' + sheet.label + ' & pushed to GitHub');
+      setTimeout(() => { status.className = 'gl-status'; }, 8000);
+    } else {
+      const errData = await resp.json().catch(() => ({}));
+      const errMsg = errData.message || errData.error || resp.statusText;
+      status.className = 'gl-status show err';
+      status.innerHTML = '<strong>GitHub API error (' + resp.status + ')</strong>: ' + esc(String(errMsg));
+      showToast('Entry saved locally — GitHub push failed');
+    }
+  } catch (err) {
+    status.className = 'gl-status show err';
+    status.innerHTML = '<strong>Push failed</strong>: ' + esc(err.message);
+    showToast('Entry saved locally — GitHub push failed');
+  }
+}
+
+// Close on overlay click or Escape
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ═══════════════════════════════════════════════════════════
+//  DB LOADING — load lot data from cfps.db at runtime
+// ═══════════════════════════════════════════════════════════
+
+// Map SHEETS key → DB table name (lot_ + csvFile stem)
+function getDbTableName(key) {
+  const sheet = SHEETS[key];
+  const csvFile = sheet.csvFile || (key + '.csv');
+  return 'lot_' + csvFile.replace('.csv', '');
+}
+
+function parseDbValue(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (s === '') return null;
+  // Try number (but preserve leading-zero strings like "007")
+  if (!isNaN(Number(s)) && !/^0\d/.test(s)) return Number(s);
+  return s;
+}
+
+function loadSheetFromDb(db, key) {
+  const sheet = SHEETS[key];
+  const tableName = getDbTableName(key);
+  const csvHeaders = sheet.csvHeaders || sheet.headers;
+
+  try {
+    // Check table exists
+    const check = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='" + tableName + "'");
+    if (!check.length || !check[0].values.length) {
+      console.warn('Table not found: ' + tableName);
+      return false;
+    }
+
+    const result = db.exec('SELECT * FROM "' + tableName + '"');
+    if (!result.length || !result[0].values.length) return false;
+
+    const dbCols = result[0].columns;
+    const rows = result[0].values;
+
+    // Map DB columns to csvHeaders order
+    const colMap = csvHeaders.map(ch => {
+      const idx = dbCols.indexOf(ch);
+      return idx;
+    });
+
+    sheet.data = rows.map(dbRow => {
+      return colMap.map(idx => {
+        if (idx < 0) return null;
+        return parseDbValue(dbRow[idx]);
+      });
+    });
+
+    return true;
+  } catch (e) {
+    console.error('Error loading ' + tableName + ':', e);
+    return false;
+  }
+}
+
+async function initFromDatabase() {
+  const panels = document.getElementById('panels');
+  panels.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text3);font-size:.9rem">' +
+    '<span class="spinner" style="width:20px;height:20px;border-width:2.5px;vertical-align:middle;margin-right:10px"></span>' +
+    'Loading lot data from database…</div>';
+
+  try {
+    const SQL = await initSqlJs({
+      locateFile: f => 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/' + f
+    });
+    const resp = await fetch('cfps.db');
+    if (!resp.ok) throw new Error('cfps.db not found (HTTP ' + resp.status + '). Run the pipeline first.');
+    const buf = await resp.arrayBuffer();
+    const db = new SQL.Database(new Uint8Array(buf));
+
+    let loaded = 0;
+    sheetKeys.forEach(key => {
+      if (loadSheetFromDb(db, key)) loaded++;
+    });
+    db.close();
+
+    if (loaded === 0) throw new Error('No lot tables found in the database.');
+
+    console.log('Loaded ' + loaded + '/' + sheetKeys.length + ' lot tables from cfps.db');
+    showToast('Loaded ' + loaded + ' lot tables from database');
+  } catch (err) {
+    console.error('DB load failed:', err);
+    // Show error but still render whatever we have (empty tables)
+    showToast('DB load failed: ' + err.message + ' — tables may be empty');
+  }
+
+  // Render regardless (empty tables are OK — user can add entries)
+  renderStats();
+  renderTabs();
+  renderPanels();
+  buildCharts(activeTab);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+loadGLSettings();
+renderLegend();
+renderStats();
+renderTabs();
+// Load data from DB, then re-render
+initFromDatabase();
+</script>
+
+<script src="shared/help-widget.js"></script>
+<button class="help-fab" id="helpFab" onclick="toggleHelp()" title="Help">?</button>
+<div class="help-overlay" id="helpOverlay" onclick="toggleHelp()"></div>
+<div class="help-modal" id="helpModal">
+  <button class="help-close" onclick="toggleHelp()">&times;</button>
+  <div class="help-modal-head"><h2>Lot Browser — Help</h2><p>Browse, manage, and track P902 reagent lots</p></div>
+  <div class="help-modal-body"><h3>Navigation</h3>
+<p>Use the <strong>tabs</strong> across the top to switch between lot categories: Fermentation, Lysate, Master Mix, Standard Curves, Controls, CF Product, Plasmid, Premix, Pre-SO MM, Solubility Enhancer, Delivered Material.</p>
+
+<h3>Table Features</h3>
+<ul>
+<li><strong>Search</strong> — Type in the search bar to filter rows in real-time across all visible columns.</li>
+<li><strong>Sort</strong> — Click any column header to sort ascending/descending.</li>
+<li><strong>Computed Columns</strong> — Some columns are auto-calculated from formulas (shown with a formula chip). These update automatically.</li>
+</ul>
+
+<h3>Charts &amp; Stats</h3>
+<p>Below the table, distribution histograms and summary statistics are shown for numeric columns. Text columns show unique value counts.</p>
+
+<h3>Add New Entry</h3>
+<p>Click <strong>+ Add Entry</strong> to open a modal form. Fill in the fields and click <strong>Save</strong>. The new row appears in the table immediately.</p>
+
+<h3>Export &amp; Push</h3>
+<ul>
+<li><strong>Export CSV</strong> — Download the current lot table as a CSV file.</li>
+<li><strong>Push to GitLab</strong> — Commit the updated CSV directly to your repository. Configure your GitLab Project ID, Branch, and Personal Access Token in the settings section.</li>
+</ul></div>
+</div>
+
+</body>
+</html>
